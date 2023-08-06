@@ -1,0 +1,74 @@
+# Project RAGNA SCRIBE Program Main Menu
+# Language: German
+
+Datei
+	Neu	file.new	icon	ctrl N	true	#228B22
+	Öffnen	file.open	asyn,icon	ctrl O	true	#228B22
+	Schließen	file.close	asyn	ctrl C	true	#228B22
+	Alle schließen	file.close.all		alt C	true	#228B22
+	Löschen	file.delete	icon	ctrl D	true	#228B22
+	---
+	Zuletzt geöffnet 	file.open.recent	menu,asyn,icon	F
+	Sitzung wiederherstellen	file.open.session		alt O 	true	
+#	Öffnen URL	file.open.url	asyn		true
+#	Alte Versionen >	file.old.versions
+	---
+	Speichern	file.save	asyn,icon	ctrl S	true	#FF8C00
+	Alle speichern	file.save.all		alt S	true	#FF8C00
+	Speichern als	file.save.as	asyn		true	#FF8C00
+	Speichern Kopie	file.save.copy	asyn		true	#FF8C00
+	---
+	Exit	system.exit	icon	ctrl X	true	
+		
+Bearbeiten	menu.edit	menu
+	Präferenzen	admin.edit.preferences			true
+
+Aktionen
+	Suchen	action.search	icon	ctrl F
+	Internet-Suche	action.search.web	icon	ctrl G	true
+	Ubersetzen	action.translate.web	icon	ctrl T	true
+	---
+	Drucken	action.print		ctrl P	true
+	Sortieren	action.sort
+#	Fester Zeilenumbruch	action.linewrap.hard
+#	Dokumentenart ändern	action.document.type
+	
+Ansicht
+	Toolbars
+		Programm-Befehle	view.visible.maintoolbar	check		true
+		Baum-Befehle	view.visible.treetoolbar	check		true
+		Artikel-Befehle	view.visible.arttoolbar	check		true
+#		---
+#		Toolbars freischwebend	view.toolbars.floatable	check		true
+	Bildschirm
+		Baum + Artikel	view.display.all	radio		true
+		Artikel	view.display.article	radio		true
+		Baum	view.display.tree	radio		true
+	Schrift
+		Vergrößern	view.font.enlarge		ctrl PLUS	true
+		Verkleinern	view.font.decrease		ctrl MINUS	true
+		
+Verwalten
+	Verschlüsselung	admin.file.encryption	icon		false
+	Dateigeschichte	admin.file.restore	menu		true
+#	---
+#	Import
+#		als Zweig
+#			Ragna Datei	admin.import.ragna
+#			Inhaltsverzeichnis	admin.import.tree
+#		Textdatei als neuen Artikel	admin.import.text
+#	Export
+#		Zweig
+#			als Ragna Datei	admin.export.ragna
+#			als Textdatei	admin.export.text
+#		Inhaltsverzeichnis	admin.export.tree.file
+	---
+	Präferenzen	admin.edit.preferences		ctrl R	
+	
+Hilfe
+	System Information	help.info.system			true
+	User Manual	help.user.manual			true
+	---
+	Ragna Scribe	help.about			true	#FF
+	
+	

@@ -1,0 +1,135 @@
+<Treepad version 2.7 UUID=1620b6acae82b8d05b0cd905aa137416>
+dt=Text
+<node>
+Ragna Scribe Develop
+0
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Milestones
+1
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+System
+1
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Preferences and Options
+2
+= Location of the options / preferences
+
+- system options reside in the Java Preferences system in the node 
+"/ragnasc/system/options" with key "properties".
+This definition can be overridden by a commandline option '-o'
+which allows to specify a filepath. See user manual.
+
+- document options reside in Java Preferences node "/ragnasc/document/prop"
+For each document there exist two entries in this database:
+a) with key = UUID number (hexdacimal string) and value being the properties
+b) with key = absolute path of the document storage file and value = UUID
+
+- article options rside inside document options under keys "LIST.ARTOPT-x" where
+'x' is replaced with numbers.
+
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+System Options Synopsis
+3
+
+Key	           Type	        Meaning
+--------------------------------------------------------------------------------------------------
+currentDir	           String
+defaultDocumentType  choice
+defaultDocumentDisplayModus  choice
+defaultSliderPosition     int                  position (pixel) of the orderview - article divider
+defaultTreepadEncoding	String	character encoding for Treepad files
+exchangeDir                 String             filepath of exchange directory
+hasMainToolbar	           boolean	        whether the main command toolbar is visible
+hasTreeToolbar	           boolean	        whether the toolbar in document order-view visible
+hasArticleToolbar         boolean          whether the toolbar in document article-view visible
+historyDir 	          String	       filepath of the file history directory
+isToolbarsFloatable      boolean          whether command toolbars are floatable
+isAutoOpenRecentFile  boolean          whether the most recently opened file is re-opened at program start
+isAutoOpenSession      boolean          whether the lastest open document set is re-opened at program start
+lastAccessTime            long                epoch seconds of last program start
+list-new-docs	            StringList       List of Hexstring, UUIDs of new + unsaved docs
+maxShortTitleLength    int                   maximum length of short document title
+recentFilesContent        String	        list of filepaths, separated by semicolon
+recentSessionContent   String            list of filepaths, separated by semicolon
+showFilePathInsteadOfTitle  boolean   modus for display of document title or filepath
+startSearchExp              String  	        http expression for Internet search service
+startTranslateExp          String  	        http expression for Internet translate service
+useDefaultFileExtensions  boolean
+useFileHistory                boolean         whether history files for modified documents are created
+useMirroring	             boolean	        whether documents are safety-mirrored external
+workerThreads	            int	        number of maximum worker threads active
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Document Options Synopsis
+3
+display-modus		modus of document display (editor, order or both)
+divider-pos		pixel position of the screen divider in document display
+selected-article		
+text-encoding 		character set to serialise the document (Treepad only)
+orderview-font		font for the order-view component
+<list-of-article-serials>	compilation of article properties serialisations
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Article Properties Synopsis
+3
+uuid	S  article UUID
+tooltip	S  description about the article
+cursor	I  cursor position
+selmark	I  selection start position
+visibleRect	? visible rectangle of the editor document
+linewrap	B  linewrapping active
+font	S  article default font description
+bgdcolor	I  background color description (RGB int value)
+fgrcolor	I  foreground color description (RGB int value)
+
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Paletten
+2
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Background Colours
+3
+= Background Colours
+
+Default:	cornsilk
+Light:	aliceblue, antiquewhite, beige, aquamarine, floralwhite, ghostwhite, lavender, lightcyan
+	lightblue, lightpink, lightslamon, linen, mistyrose, palegreen, whitesmoke, wheat, thistle, tan
+
+Medium:	burlywood, chartreuse, coral, cornflowerblue, crimson, darkgoldenrod, 
+	gold, greenyellow, goldenrod, hotpink, lightcoral, lightseagreen, orangered, orchid, plum
+	skyblue, yellowgreen, tomato, turquoise, violet
+
+Strong:	brown, saddlebrown, darkblue, darkgreen, darkmagenta, darkolivegreen, darkslateblue
+	darkviolet, darkred, indigo, royalblue, sienna, seagreen, slateblue, steelblue, forestgreen, 
+	firebrick, mediumblue, slategray
+	
+== Selektion
+
+Light:	cornsilk, antiquewhite, ivory, <noname>, lavender, lightcyan, palegreen, powderblue, 
+	greenyellow, mistyrose, thistle, pink, khaki, moccasin, tan
+
+Standard:	cyan, green, yellow, magenta, lightgray, gray, darkgray,  black, white
+
+Medium:	plum, violet, crimson, salmon, chartreuse, coral, CYAN, gold, goldenrod, 
+	lightseagreen, cornflowerblue, hotpink, orange, skyblue
+
+Strong:	sienna, seagreen, royalblue, darkblue, slateblue, slategray, firebrick, forestgreen, darkviolet,
+	
+<end node> 5P9i0s8y19Z

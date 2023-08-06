@@ -1,0 +1,89 @@
+<Treepad version 2.7 UUID=9ff9bcc7417ad86b51b8131bf3b51d50>
+dt=Text
+<node>
+Ragna Scribe User Manual
+0
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Introduction
+1
+= Introduction
+
+Ragna Scribe is a multi-dimensional text editor for documents which tree-order their text articles. Texts can be written in type 'text/plain', i.e. without style formatting. The file format is the basic "Treepad" file format 2.7 (as is known from the editor program of the same name). The text is segmented in articles which are ordered in a tree structure. Articles can be moved, sorted, copied and pasted within the tree; articles can also be copied between different documents and multiple documents can be open at the same time in the editor.
+
+== Encryption
+Textfiles can be encrypted in the most comfortable way. Just fill in your chosen password and the system will save and load encrypted files of a high security standard. We use the algorithms of project "FileHashler" to create encrypted files, which again applies the file format of the well known project "Password Safe".
+
+== Data Security
+The program serves undo/redo functions and automatically mirrors ongoing work to persistent storage while you are editing. Thus miscellaneous losses of creations are minimised. Moreover some file history is created from which copies can be loaded for comparison.
+
+== Roadmap
+It is intended to introduce a more capable file format in one of the forthcoming editions, allowing for style editions, property storage and placement of images. The current Treepad format will be continued.
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Reference
+1
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Command Line
+2
+= Command Line Options
+
+      -a [directory]	special application directory
+      -d [directory]	restrict document usage path
+      -h, -help 		print this help message and exit
+      -l [de|en]		GUI language selection
+      -o [file]		refer to/create the given option file
+      -s [directory]	special file-safety (history) directory
+
+= Comments
+- Available GUI languages are English (en) and German (de).
+- An option file can be specified which can hold the global preferences. 
+  Document related preferences are always stored in the Java Preferences system.
+- The application directory is by default '.ragnasc' and is the place where the program 
+  normally holds history and safety files.
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Error Values
+2
+= Error Values
+
+== System Exit Values
+   0    :   ok
+   1    :   incompatible Java Virtual Machine
+   2    :   system directory error
+   3    :   commandline argument invalid
+   4    :   startup classes error (stacktrace)
+
+
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Editor Keys
+2
+= Editor Keys
+
+Editor Keys are shortcut commands which can be given through special keys on the keyboard.
+
+CTRL-W	select word
+CTRL-L 	select line
+CTRL-P 	select paragraph
+CTRL-Z 	undo
+CTRL-SHIFT-Z 	redo
+CTRL-Y 	redo
+CTRL-D 	current local date (universal notation)
+CTRL-T 	current local time (universal notation)
+CTRL-E 	current local date (locale notation)
+CTRL-F 	current local time (locale notation)
+CTRL-U 	universal date and time
+CTRL-PLUS 	increase font size
+CTRL-MINUS 	decrease font size
+
+
+
+<end node> 5P9i0s8y19Z

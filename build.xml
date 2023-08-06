@@ -1,0 +1,174 @@
+<project name="ragna scribe text editor" basedir="." default="help">
+
+<!--   DIRECTORIES                                                    -->
+<!--   you may have to adapt these settings to your current installation  -->
+
+	<property name="src" value="${basedir}/src" />
+	<property name="doc" value="${basedir}/doc" />
+	<property name="dist" value="${basedir}/bin" />
+	<property name="resource" value="${basedir}/resource" />
+	<property name="apidoc" value="${basedir}/doc/api" />
+	<property name="build" value="${basedir}/build" />
+	<property name="lib" value="${basedir}/lib" />
+	<property name="extlib" value="${basedir}/../../Develop/Library" />
+
+<!--   FILES                                                          -->
+<!--   you may have to adapt these settings to your current installation  -->
+
+   	<property name="junit" value="${extlib}/junit-4.jar"/>
+   	<property name="kunststoff" value="${extlib}/kunststoff.jar"/>
+   	<property name="jgoodies" value="${extlib}/plastic.jar"/>
+   	<property name="pagosoft" value="${extlib}/PgsLookAndFeel.jar"/>
+   	<property name="keystore" value="${extlib}/kseKeystore"/>
+   	<property name="activation" value="${extlib}/javax.activation.jar"/>
+   	<property name="util-cls-f1" value="${extlib}/kse-util-cla1-0-9-1.jar"/>
+   	<property name="util-cls-f2" value="${extlib}/kse-util-cla2-0-9-1.jar"/>
+   	<property name="util-cls" value="${basedir}/../UtilClasses/classes"/>
+   	<property name="moelnir" value="${extlib}/moelnir-kse-1-1-0.jar"/>
+   	<property name="fafnir" value="${extlib}/fafnir-kse-1-1-0.jar"/>
+   	<property name="file-hashler" value="${extlib}/fhl-0-2-2-U.jar"/>
+
+<!--   TEXT AND LISTS                                                 -->
+
+	<property name="p-name" value="Ragna" />
+	<property name="p-ver" value="1-0-0" />
+	<property name="a-name" value="ragna" />
+	<property name="a-base-package" value="org.ragna" />
+	<property name="a-base-package-fs" value="org/ragna" />
+	<property name="year" value="2023" />
+	<property name="release date" value="04 Aug. 2023" />
+   <property name="docfileset" value="License.txt Readme.txt Changelog.txt" />
+   <property name="rootfileset" value="build.xml MANIFEST.MF" />
+   <property name="externclasspath" value="${junit};${activation};${util-cls};${file-hashler}" />
+
+
+<target name="init">
+    <!-- Create the time stamp -->
+    <tstamp/>
+    <mkdir dir="${dist}"/>
+    <mkdir dir="${build}"/>
+</target>
+
+<target name="api" depends="init" description="create Javadoc API for frontend application">
+<javadoc packagenames="${a-base-package}.*"
+           sourcepath="${src}"
+           excludepackagenames="" 
+           defaultexcludes="yes"
+           destdir="${apidoc}"
+           classpath="${externclasspath}"
+           author="true"
+           version="true"
+           windowtitle="${p-name} ${p-ver} Frontend API Documentation">
+<bottom><![CDATA[<i>${p-name} ${p-ver}, Copyright &#169; ${year} Wolfgang Keller (KSE). All Rights Reserved. Contact kse@sourceforge.net</i>]]></bottom>
+<Header><![CDATA[<b>${p-name} ${p-ver}</b>]]></Header>
+<Doctitle><![CDATA[${p-name} ${p-ver} API Documentation
+          <br>Release Date: ${release date}</p>]]></Doctitle>
+</javadoc>
+</target>
+
+
+<target name="clear-c" description="remove class files from build area">
+   <delete>
+   <fileset dir="${build}" includes="**/*.class"/>
+   </delete>
+</target>
+
+<target name="comp" depends="init,clear-c" description="compile Ragna frontend application">
+   <javac srcdir="${src}"  destdir="${build}"  
+       classpath="${externclasspath}" encoding="UTF-8" />
+</target>
+
+<target name="jar" depends="init,comp" description="create JPWS frontend executable">
+<!-- remove previous outputs except standard executable -->
+<property name="programname" value="${dist}/${a-name}-${p-ver}" />
+<delete file="${programname}.jar"/>
+<delete file="${programname}-U.jar"/>
+
+<!-- create the executable (versioned name) -->
+<jar destfile="${programname}.jar" manifest="MANIFEST.MF" update="false">
+   <fileset dir="${build}" includes="${a-base-package-fs}/**" excludes="**/Test*"/>
+   <zipfileset dir="${resource}" prefix="${a-base-package-fs}/resource" />
+   <fileset dir="${util-cls}" excludes="**/Test*"/>
+   <zipfileset src="${activation}"/>
+   <zipfileset src="${file-hashler}" excludes="**/Test*"/>
+<!--   <zipfileset src="${moelnir}" excludes="**/Test*"/>-->
+<!--   <zipfileset src="${kunststoff}"/> 
+   <zipfileset src="${jgoodies}"/>
+   <zipfileset src="${pagosoft}"/> -->
+</jar>
+
+<!-- jar-sign the output if access keys are available -->
+<!--<antcall target="signjar">
+   <param name="sfile" value="${programname}.jar" />
+   <param name="ufile" value="${programname}-U.jar" />
+</antcall>-->
+
+<!-- make a copy to standard executable name -->
+<copy file="${programname}.jar" tofile="${dist}/${a-name}.jar" overwrite="yes"/>
+</target>
+
+
+<target name="dist" depends="jar" description="create JPWS Frontend distribution package">
+    <property name="filename" value="${dist}/${a-name}-devel-${p-ver}.zip" />
+    <property name="programname" value="${dist}/${a-name}-${p-ver}" />
+    <zip destfile="${filename}">
+<!--    <zipfileset dir="${apidoc}" prefix="jpws/doc/front/api"/>-->
+    <zipfileset dir="${basedir}" includes="${rootfileset}" prefix="${p-name}" />
+<!--    <zipfileset dir="${doc}" includes="${docfileset}" prefix="${p-name}/doc" />-->
+    <zipfileset dir="${doc}" prefix="${p-name}/doc" />
+    <zipfileset dir="${resource}" prefix="${p-name}/resource"/> 
+    <zipfileset dir="${src}" prefix="${p-name}/src"/>
+    <zipfileset file="${dist}/${a-name}-${p-ver}.jar" prefix="${p-name}/bin"/>
+    <zipfileset file="${dist}/${a-name}.jar" prefix="${p-name}/bin"/>
+
+    <zipfileset file="${activation}" prefix="${p-name}/lib"/>
+    <zipfileset file="${util-cls-f1}" prefix="${p-name}/lib"/>
+    <zipfileset file="${util-cls-f2}" prefix="${p-name}/lib"/>
+    <zipfileset file="${file-hashler}" prefix="${p-name}/lib"/>
+<!--
+    <zipfileset file="${kunststoff}" prefix="jpws/lib"/>
+    <zipfileset file="${kunststoff}.sig" prefix="jpws/lib"/>
+    <zipfileset file="${jgoodies}" prefix="jpws/lib"/>
+    <zipfileset file="${jgoodies}.sig" prefix="jpws/lib"/>
+    <zipfileset file="${pagosoft}" prefix="jpws/lib"/>
+    <zipfileset file="${pagosoft}.sig" prefix="jpws/lib"/>
+-->
+  </zip>
+<checksum file="${filename}"/>
+</target>
+
+<target name="trans" description="transfers public project files to SVN space">
+<mkdir dir="${sftrans}"/>
+<copy todir="${sftrans}/src" preservelastmodified="true" >
+    <fileset dir="${src}" includes="**/*.java" excludes="**/Test*"/>
+</copy>
+<copy todir="${sftrans}/resource" preservelastmodified="true">
+    <fileset dir="${res}" includes="**/*.*"/>
+</copy>
+<copy todir="${sftrans}" preservelastmodified="true">
+    <fileset dir="${basedir}" includes="${rootfileset}" />
+</copy>
+<copy todir="${sftrans}/doc" preservelastmodified="true">
+    <fileset dir="${doc}" includes="${docfileset}" />
+</copy>
+<copy file="${kunststoff}" todir="${sftrans}/lib"  preservelastmodified="true" />
+<copy file="${jgoodies}" todir="${sftrans}/lib"  preservelastmodified="true" />
+<copy file="${pagosoft}" todir="${sftrans}/lib"  preservelastmodified="true" />
+<copy file="${backlib}" todir="${sftrans}/lib" preservelastmodified="true" />
+<copy file="${backlib}.sig" todir="${sftrans}/lib" preservelastmodified="true" />
+<copy file="${backlibsource}" todir="${sftrans}/lib" preservelastmodified="true" />
+<copy file="${backlibsource}.sig" todir="${sftrans}/lib" preservelastmodified="true" />
+</target>
+
+	
+<target name="help">
+	<echo>Targets:
+--------
+jar          - create JPWS executable jar
+api          - create Javadoc API for frontend application
+<!--dist         - create JPWS-F distribution package
+clear-c      - remove class files from build area
+trans        - move a snapshot of the project to another place -->		
+	</echo>
+</target>
+</project>

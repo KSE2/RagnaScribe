@@ -1,0 +1,75 @@
+# Project RAGNA SCRIBE Program Main Menu
+# Language: English
+
+File
+	New	file.new	icon	ctrl N	true	#228B22
+	Open	file.open	asyn,icon	ctrl O	true	#228B22
+	Close	file.close	asyn	ctrl C	true	#228B22
+	Close All	file.close.all		alt C	true	#228B22
+	Delete	file.delete	icon	ctrl D	true	#228B22
+	---
+	Recent Files 	file.open.recent	menu,asyn,icon	F
+	Last Session	file.open.session		alt O 	true	
+#	Open URL	file.open.url	asyn		true
+#	Old Versions >	file.old.versions
+	---
+	Save	file.save	asyn,icon	ctrl S	true	#FF8C00
+	Save All	file.save.all		alt S	true	#FF8C00
+	Save As	file.save.as	asyn		true	#FF8C00
+	Save Copy	file.save.copy	asyn		true	#FF8C00
+	---
+	Exit	system.exit	icon	ctrl X	true	
+		
+Edit	menu.edit	menu
+	Preferences	admin.edit.preferences			true
+
+Actions
+	Search	action.search	icon	ctrl F
+	Internet-Search	action.search.web	icon	ctrl G	true
+	Translate	action.translate.web	icon	ctrl T	true
+	---
+	Print	action.print		ctrl P	true
+	Sort	action.sort
+#	Fester Zeilenumbruch	action.linewrap.hard
+#	Dokumentenart ändern	action.document.type
+	
+View
+	Toolbars
+		Program Commands	view.visible.maintoolbar	check		true
+		Outline Commands	view.visible.treetoolbar	check		true
+		Article Commands	view.visible.arttoolbar	check		true
+#		---
+#		Floating Toolbars	view.toolbars.floatable	check		true
+	Screen
+		Outline + Article	view.display.all	radio		true
+		Article	view.display.article	radio		true
+		Outline	view.display.tree	radio		true
+	Font
+		Increase	view.font.enlarge		ctrl PLUS	true
+		Decrease	view.font.decrease		ctrl MINUS	true
+		
+Manage
+	Encryption	admin.file.encryption	icon		false
+#	Data Security	admin.file.backup	icon		true
+	File History	admin.file.restore	menu		true
+#	---
+#	Import
+#		As Branch
+#			Ragna File	admin.import.ragna
+#			Content Table	admin.import.tree
+#		Text File as New Article	admin.import.text
+#	Export
+#		Branch
+#			As Ragna File	admin.export.ragna
+#			As Text File	admin.export.text
+#		Content Table	admin.export.tree.file
+	---
+	Preferences	admin.edit.preferences		ctrl R	
+	
+Help
+	System Information	help.info.system			true
+	User Manual	help.user.manual			true
+	---
+	Ragna Scribe	help.about			true	#FF
+	
+	

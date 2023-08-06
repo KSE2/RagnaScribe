@@ -1,0 +1,16 @@
+*~
+*.bak
+*.ps
+*.dat
+*.class
+
+.settings
+.classpath
+-project
+/classes
+/bin
+/build
+/test
+/work
+/doc/api
+
