@@ -44,6 +44,7 @@ import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import java.util.Stack;
 import java.util.Timer;
@@ -70,7 +71,6 @@ import org.ragna.front.StatusBar;
 import org.ragna.front.util.ResourceLoader;
 import org.ragna.front.util.SetStackMenu;
 import org.ragna.io.IO_Manager;
-import org.ragna.util.CommandlineHandler;
 import org.ragna.util.OptionBag;
 import org.ragna.util.PersistentOptions;
 
@@ -80,12 +80,13 @@ import kse.utilclass.misc.PropertySupport;
 import kse.utilclass.misc.SystemProperties;
 import kse.utilclass.misc.UnixColor;
 import kse.utilclass.misc.Util;
+import kse.utilclass2.misc.CommandlineHandler;
 import kse.utilclass2.misc.MirrorFileManager;
 
 
 public class Global {
 
-   public static final String APPLICATION_TITLE = "Ragna Scribe 1.0.0";
+   public static final String APPLICATION_TITLE = "Ragna Scribe 1.2.1";
    public static final String DEFAULT_OPTIONFILE_NAME = "ragnasc.pref";
    public static final String DEFAULT_APPLICATION_DIR_NAME = ".ragnasc";
    public static final String DEFAULT_HISTORY_DIR_NAME = "safe";
@@ -135,14 +136,13 @@ public class Global {
    private static SystemProperties          systemProperties;
    private static OptionBag                 systemOptions; 
    private static OptionHandler				optionHandler = new OptionHandler();
-   private static SetStackMenu              recentFilesMenu;
+   private static RecentFilesStack          recentFilesMenu;
    private static Timer                     timer;
    private static Locale 					locale = Locale.getDefault();
 
    // Application parameters
    private static boolean                 isWindows;
    private static boolean                 isRestrictedFilepath;
-//   private static boolean                 isAllowRemovableMedia;
    private static boolean                 isFixedHistoryDir;
    private static File                    mirrorDir;
    private static File                    programDir;
@@ -161,24 +161,24 @@ public class Global {
    }
    
    public static File getExchangeDirectory () {
-	      return exchangeDir;
-	   }
+      return exchangeDir;
+   }
 	   
    public static File getHistoryDirectory () {
-	      return historyDir;
-	   }
+      return historyDir;
+   }
 	   
    public static File getDefaultHistoryDirName () {
        return new File(applicationDir, DEFAULT_HISTORY_DIR_NAME);
    }
 	   
    public static File getApplicationDirectory () {
-	      return applicationDir;
-	   }
+      return applicationDir;
+   }
 	   
    public static File getProgramDirectory () {
-	      return programDir;
-	   }
+      return programDir;
+   }
 	   
    public static void setCurrentDirectory (File dir) throws IOException {
       if (dir != null && !currentDir.equals(dir)) {
@@ -194,7 +194,7 @@ public class Global {
 	   
    /** Sets a new value for the file history directory. 
     * 
-    * @param dir
+    * @param dir File
     * @throws IOException
     */
    public static void setHistoryDirectory (File dir) throws IOException {
@@ -255,6 +255,15 @@ public class Global {
    /** The currently active default character set of the Java Virtual Machine. */
    public static String getDefaultCharset () {
       return Charset.defaultCharset().name();
+   }
+
+   /** The currently active default character set for <i>Treepad</i> document
+    * files. (This value can be manipulated by user interaction in the 
+    * preferences dialog.)  
+    */
+   public static String getDefaultTreepadEncoding () {
+	  String result = systemOptions.getOption("defaultTreepadEncoding");
+      return result.isEmpty() ? getDefaultCharset() : result;
    }
 
    /** The global default text editor font.
@@ -332,7 +341,7 @@ public class Global {
    }
 
    public static void saveSystemOptions () {
-       OptionHandler.saveSystemOptions( systemOptions );
+       OptionHandler.saveSystemOptions(systemOptions);
    }
    
 //  ****************  INNER CLASSES   **********************
@@ -358,7 +367,7 @@ private static class StartupHandler {
       isWindows = System.getProperty("os.name","").toLowerCase().indexOf("windows") > -1;
       programDir = new File(getProgramPath());
       try {
-         userDir = new File( System.getProperty("user.dir") ).getCanonicalFile();
+         userDir = Util.getUserDir();
          homeDir = new File( System.getProperty("user.home", userDir.getPath()) ).getCanonicalFile();
          currentDir = userDir;
          applicationDir = new File(homeDir, DEFAULT_APPLICATION_DIR_NAME).getCanonicalFile();
@@ -377,6 +386,7 @@ private static class StartupHandler {
       Log.setThreadIds(true);
       Log.setExcludeList(new String[] {"ButtonBar", "ButtonBarDialog", "DialogButtonBar", "StatusBar", 
     		    "JMenuReader", "MightyMenuBar"});
+      StatusBar.setTimer(timer);
       
       // interpret the command line 
       digest_commandline(args);
@@ -394,6 +404,16 @@ private static class StartupHandler {
       systemOptions = OptionHandler.loadSystemOptions();
 	  assert systemOptions != null;
       systemOptions.addPropertyChangeListener(optionHandler);
+      
+      // report ORPHAN documents memory
+      List<String> list = systemOptions.getStringList("list-new-docs");
+      if (list.isEmpty()) {
+    	  consoleLn("# no Orphan documents listed");  
+      } else {
+    	  String hstr =  "# ORPHAN documents:";
+    	  for (String s : list) hstr += " ".concat(s);
+    	  consoleLn(hstr);
+      }
 
       // set individual history directory (if not set by command-line option)
       if (!isFixedHistoryDir) {
@@ -460,13 +480,6 @@ private static class StartupHandler {
       res.addResourcePath( "" );
       res.init ();
       
-      // load recent files menu
-      recentFilesMenu = new SetStackMenu("Recent Files", 16, true);
-      recentFilesMenu.setAllowListDeletion(true);
-      String content = systemOptions.getOption("recentFilesContent");
-      recentFilesMenu.loadStringContent(content, ';');
-      Log.debug(5, "(StartupHandler) loading recent files with: ".concat(content));
-      
       // basic application classes
       try {
     	  IO_Manager.get();
@@ -477,14 +490,37 @@ private static class StartupHandler {
     	  System.exit(4);
       }
 
+      // start task to promote file history system
+      Runnable run = new Runnable () {
+    	  @Override
+    	  public void run() {
+    		  IO_Manager.get().promoteHistory();
+    	  }
+      };
+      ActionHandler.get().scheduleWorkerTask(run, "File History Promotion");
+      
       // identify the MIRROR directory and create the manager
       if (mirrorDir == null) {
          mirrorDir = new File(applicationDir, DEFAULT_MIRROR_DIR_NAME);
       }
-      mirrorFileManager = new MirrorFileManager(mirrorDir, mirrorCheckPeriod);
-      if (!systemOptions.isOptionSet("useMirroring")) {
-    	  mirrorFileManager.setActive(false);
+      try {
+    	  mirrorFileManager = new MirrorFileManager(mirrorDir, mirrorCheckPeriod);
+    	  if (!systemOptions.isOptionSet("useMirroring")) {
+    		  mirrorFileManager.setActive(false);
+    	  }
+      } catch (Exception e) {
+    	  consoleLn("*** Mirror-File directory inaccessible: ".concat(mirrorDir.getAbsolutePath()));
+    	  consoleLn("    " + e);
+    	  System.exit(4);
       }
+
+      // load recent files menu
+      recentFilesMenu = new RecentFilesStack("Recent Files", 16);
+      recentFilesMenu.setAllowListDeletion(true);
+      String content = systemOptions.getOption("recentFilesContent");
+      recentFilesMenu.loadStringContent(content, ';');
+      IO_Manager.get().addPropertyChangeListener(recentFilesMenu);
+      Log.debug(5, "(StartupHandler) loading recent files with: ".concat(content));
    }
 
    private static void startup_front () {
@@ -551,12 +587,11 @@ private static class StartupHandler {
    private static void digest_commandline ( String args[] ) {
       
       // interpret the command line (catch program arguments) 
-      cmlHandler = new CommandlineHandler( CommandlineHandler.Organisation.trailing );
-      cmlHandler.setUnitaryOptions("-h -help --h --help -m");
+      cmlHandler = new CommandlineHandler( CommandlineHandler.Organisation.TRAILING );
+      cmlHandler.setUnaryOptions("-h -help --h --help -m");
       try { 
          cmlHandler.digest(args); 
-      }
-      catch ( IllegalStateException e ) {
+      } catch ( IllegalStateException e ) {
          consoleLn( "*** ILLEGAL COMMAND-LINE ORGANISATION: \r\n" + e );
          consoleLn( "*** COMMAND-LINE PARAMETERS IGNORED !!" );
          consoleLn( "*** OPTIONS MUST BE TRAILING ONLY" );
@@ -604,7 +639,6 @@ private static class StartupHandler {
             currentDir = new File(path).getCanonicalFile();
             restrictedFilepath = currentDir.getPath();
             isRestrictedFilepath = true;
-//            isAllowRemovableMedia = cmlHandler.hasOption("-m");
             if (!Util.ensureDirectory(applicationDir, null)) {
                throw new IOException("unreachable directory: " + path);
             }
@@ -655,7 +689,6 @@ private static class StartupHandler {
       consoleLn( "-d [directory]\t\trestrict document usage path" );
       consoleLn( "-h, -help \t\tprint this help message and exit" );
       consoleLn( "-l [de|en]\t\tGUI language selection" );
-//      consoleLn( "-m \t\t\tallow removable media (addition to -d)" );
       consoleLn( "-o [file]\t\trefer to/create the given option file" );
       consoleLn( "-s [directory]\t\tspecial file-safety directory" );
    }
@@ -734,7 +767,6 @@ private static class StartupHandler {
 
    /** Returns the (best guess) for the location of the program files.
     * @return String directory path of application in canonical form
-    * @since 0-5-0
     */   
    private static String getProgramPath () {
       String path, hstr;
@@ -928,6 +960,17 @@ public static boolean isWindows () {
    return isWindows;
 }
 
+/** The locale specific rendering for "Yes" or "No", depending on the argument
+ * value.
+ * 
+ * @param v boolean
+ * @return String
+ */
+public static String yesNoText (boolean v) {
+	String token = v ? "label.yes" : "label.no";
+	return res.getDisplay(token);
+}
+
 private static String[] treepadCompatibleCS = new String[] {
 		"ISO-8859-1", "ISO-8859-2", "ISO-8859-3", "ISO-8859-4", "ISO-8859-5", "ISO-8859-6",  
 		"ISO-8859-7", "ISO-8859-8", "ISO-8859-9", "ISO-8859-10", "ISO-8859-11", "ISO-8859-13", 
@@ -1048,8 +1091,6 @@ private static class SystemService {
       return instance;
    }
    
-//   private Timer timer  = new Timer();
-
    private SystemService () {
       init();
    }
@@ -1179,7 +1220,7 @@ public static void startBrowser ( URL url )  {
          GUIService.failureMessage( "msg.failure.browseservice", e );
       }
    }
-}  // startBrowser
+}
 
 /** Starts the operating system's standard browser
  *  with an URL address to launch.
@@ -1209,7 +1250,7 @@ public static void startDefaultBrowser ( URL url ) {
    } else {
       GUIService.failureMessage( "msg.failure.missingdesktop", null );
    }
-}  // startDefaultBrowser
+}
 
 /** Starts the operating system's standard email client
  * with a recipient's address to "mailto".
@@ -1252,6 +1293,17 @@ public static void startEmailClient ( String address ) {
       return hstr;
    }
 
+   /** Whether the given filepath points to a location within the mirror
+    * file system.
+    *  
+    * @param path String filepath (local file system)
+    * @return boolean true = location within mirror-system
+    */
+   public static boolean isMirrorFilepath (String path) {
+   		String prefix = getMirrorFileManager().getMirrorRootDirectory().getAbsolutePath();
+   		return path != null && path.startsWith(prefix);
+   }
+   
 //  *************  INNER CLASSES  **********************
 
 public static HyperlinkListener createHyperLinkListener () {
@@ -1272,8 +1324,6 @@ public static HyperlinkListener createHyperLinkListener () {
                ((HTMLDocument)epane.getDocument())
                      .processHTMLFrameHyperlinkEvent( (HTMLFrameHyperlinkEvent)e );
             } else {
-//               ActionHandler.resetIdleTime();
-               
                try {
                   url = e.getURL();
                   
@@ -1329,6 +1379,58 @@ public static HyperlinkListener createHyperLinkListener () {
    };
 }
 
+private static class RecentFilesStack extends SetStackMenu implements PropertyChangeListener {
+	
+    public RecentFilesStack (String name, int maxEntries) {
+		super(name, maxEntries, true);
+	}
+
+	@Override
+    public synchronized boolean add (Object e) {
+    	Objects.requireNonNull(e);
+    	String filepath;
+    	
+    	// derive the filepath from object
+    	if (e instanceof File) {
+    		filepath = ((File)e).getAbsolutePath();
+    	} else {
+    		if (!(e instanceof String)){
+    			throw new IllegalArgumentException("illegal argument type");
+        	}
+    		filepath = (String) e;
+    	}
+
+    	// filter out paths of the mirror file service (ignore)
+    	if (isMirrorFilepath(filepath)) return false; 
+    	return super.add(filepath);
+    }
+
+	@Override
+	public void propertyChange (PropertyChangeEvent evt) {
+		String name = evt.getPropertyName();
+		Log.log(10, "(RecentFilesStack.propertyChange) --- property change: " + name);
+		
+		if ( "pathAdded".equals(name) ) {
+			push(evt.getNewValue());
+
+		} else if ( "pathReplaced".equals(name) ) {
+			remove(evt.getOldValue());
+			push(evt.getNewValue());
+
+		} else if ( "documentSaved".equals(name) ) {
+			String path = ((PadDocument)evt.getNewValue()).getExternalPath();
+			if (path != null) {
+				push(path);
+			}
+
+		} else if ( "documentDeleted".equals(name) ) {
+			String path = ((PadDocument)evt.getOldValue()).getExternalPath();
+			if (path != null) {
+				remove(path);
+			}
+		}
+	}
+} // RecentFilesStack
 
    
 }

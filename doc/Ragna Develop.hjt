@@ -1,13 +1,22 @@
-<Treepad version 2.7 UUID=1620b6acae82b8d05b0cd905aa137416>
+<Treepad version 2.7 UUID=b1184577df22a5cb484209bf64f75b97>
 dt=Text
 <node>
 Ragna Scribe Develop
 0
+
+
 <end node> 5P9i0s8y19Z
 dt=Text
 <node>
 Milestones
 1
+= Ragna Scribe Milestones
+
+-- 2023-08-04	V 1-0-0	first edition
+-- 2024-01-04 	V 1-1-0	maintenance and functional enhancement
+-- 2024-03-26 	V 1-2-0	new features (search text, etc.), maintenance
+-- 2024-05-05	V 1-2-1	improvements to encrypted format (security)
+
 <end node> 5P9i0s8y19Z
 dt=Text
 <node>
@@ -45,6 +54,7 @@ Key	           Type	        Meaning
 currentDir	           String
 defaultDocumentType  choice
 defaultDocumentDisplayModus  choice
+defaultEditorLinewrap   boolean	       preset 'linewrap' setting for articles
 defaultSliderPosition     int                  position (pixel) of the orderview - article divider
 defaultTreepadEncoding	String	character encoding for Treepad files
 exchangeDir                 String             filepath of exchange directory
@@ -67,6 +77,10 @@ useDefaultFileExtensions  boolean
 useFileHistory                boolean         whether history files for modified documents are created
 useMirroring	             boolean	        whether documents are safety-mirrored external
 workerThreads	            int	        number of maximum worker threads active
+searchCaseSensitive    boolean           text search modus "case sensitive"
+searchWholeWords      boolean          text search modus "whole words"
+textSearchValues          StringList        list of recent text search values
+textSearchScope           int                      0 = search document, 1 = search article
 
 <end node> 5P9i0s8y19Z
 dt=Text
@@ -75,7 +89,7 @@ Document Options Synopsis
 3
 display-modus		modus of document display (editor, order or both)
 divider-pos		pixel position of the screen divider in document display
-selected-article		
+selected-article		int index of selected article or -1
 text-encoding 		character set to serialise the document (Treepad only)
 orderview-font		font for the order-view component
 <list-of-article-serials>	compilation of article properties serialisations
@@ -132,4 +146,36 @@ Medium:	plum, violet, crimson, salmon, chartreuse, coral, CYAN, gold, goldenrod,
 
 Strong:	sienna, seagreen, royalblue, darkblue, slateblue, slategray, firebrick, forestgreen, darkviolet,
 	
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Usage
+1
+<end node> 5P9i0s8y19Z
+dt=Text
+<node>
+Editor Keys
+2
+= Editor Keys
+
+Editor Keys are shortcut commands which can be given through special keys on the keyboard.
+
+ALT-D 	current local date (locale notation)
+ALT-T 	current local time (locale notation)
+CTRL-D 	current local date (universal notation)
+CTRL-T 	current local time (universal notation)
+CTRL-U 	universal date and time
+
+CTRL-W	select word
+CTRL-L 	select line
+CTRL-P 	select paragraph
+CTRL-Z 	undo
+CTRL-SHIFT-Z 	redo
+CTRL-Y 	redo
+
+CTRL-PLUS 	increase font size
+CTRL-MINUS 	decrease font size
+
+
+
 <end node> 5P9i0s8y19Z

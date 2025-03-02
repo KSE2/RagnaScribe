@@ -37,6 +37,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Iterator;
@@ -55,6 +56,8 @@ import javax.swing.JButton;
 import javax.swing.JDialog;
 import javax.swing.JFileChooser;
 import javax.swing.UIManager;
+import javax.swing.event.ListSelectionEvent;
+import javax.swing.event.ListSelectionListener;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import javax.swing.text.JTextComponent;
@@ -65,10 +68,9 @@ import javax.swing.undo.UndoManager;
 import javax.swing.undo.UndoableEdit;
 
 import org.ragna.core.PadDocument.DocumentType;
+import org.ragna.core.TextSearcher.DocumentTextPosition;
 import org.ragna.front.AboutDialog;
 import org.ragna.front.ArticleEditor;
-import org.ragna.front.ColorChooserDialog;
-import org.ragna.front.DialogDocumentToolbox;
 import org.ragna.front.DisplayManager;
 import org.ragna.front.DisplayManager.DisplayModus;
 import org.ragna.front.DisplayManager.DocumentDisplay;
@@ -76,12 +78,14 @@ import org.ragna.front.DisplayManager.DocumentOrderView;
 import org.ragna.front.DisplayManager.FocusableView;
 import org.ragna.front.DocumentEncryptionDialog;
 import org.ragna.front.DocumentEncryptionDialog.TerminationType;
+import org.ragna.front.DocumentToolboxDialog;
 import org.ragna.front.GUIService;
 import org.ragna.front.PreferencesDialog;
 import org.ragna.front.PrintSelectorDialog;
 import org.ragna.front.ResolveMirrorDialog;
+import org.ragna.front.TextLocationListPanel;
+import org.ragna.front.TextSearchPanel;
 import org.ragna.front.util.DialogButtonBar;
-import org.ragna.front.util.FontChooser;
 import org.ragna.front.util.HtmlBrowserDialog;
 import org.ragna.front.util.MessageDialog;
 import org.ragna.front.util.MessageDialog.MessageType;
@@ -93,6 +97,8 @@ import org.ragna.io.IO_Manager.SystemFileType;
 import org.ragna.util.ActionManager;
 import org.ragna.util.PersistentOptions;
 
+import kse.utilclass.gui.ColorChooserDialog;
+import kse.utilclass.gui.FontChooser;
 import kse.utilclass.misc.Log;
 import kse.utilclass.misc.UUID;
 import kse.utilclass.misc.UnixColor;
@@ -133,7 +139,6 @@ public class ActionHandler extends ActionManager {
       
       try {
          // define cardinal actions
-    	 Action action;
          addAction(ActionNames.SYSTEM_EXIT);
          
          addAction(ActionNames.FILE_NEW);
@@ -174,16 +179,17 @@ public class ActionHandler extends ActionManager {
 
          addAction(ActionNames.ORDER_CREATE_CHILD);
          addAction(ActionNames.ORDER_CREATE_SIBLING);
+         addAction(ActionNames.ORDER_CREATE_DUPL);
          addAction(ActionNames.TREE_MOVE_UP);
          addAction(ActionNames.ORDER_MOVE_DOWN);
          addAction(ActionNames.ORDER_MOVE_INDENT);
          addAction(ActionNames.ORDER_MOVE_OUTDENT);
          addAction(ActionNames.ORDER_DOC_TOOLBOX);
 
+         addAction(ActionNames.ACTION_DUPLICATE);
          addAction(ActionNames.ACTION_PRINT);
          addAction(ActionNames.ACTION_SORT);
-         action = addAction(ActionNames.ACTION_SEARCH);
-         action.setEnabled(false);
+         addAction(ActionNames.ACTION_SEARCH);
          addAction(ActionNames.ACTION_SEARCH_WEB);
          addAction(ActionNames.ACTION_TRANSLATE_WEB);
          addAction(ActionNames.ACTION_LINEWRAP_HARD);
@@ -199,8 +205,8 @@ public class ActionHandler extends ActionManager {
          addAction(ActionNames.VIEW_FONT_ENLARGE);
          addAction(ActionNames.VIEW_FONT_DECREASE);
          
-         addAction(ActionNames.MANAGE_BACKUP);
-         addAction(ActionNames.MANAGE_RESTORE);
+//         addAction(ActionNames.MANAGE_BACKUP);
+//         addAction(ActionNames.MANAGE_RESTORE);
          addAction(ActionNames.MANAGE_ENCRYPTION);
          addAction(ActionNames.MANAGE_PREFERENCES);
          addAction(ActionNames.MANAGE_DELETE_HISTORY);
@@ -215,6 +221,7 @@ public class ActionHandler extends ActionManager {
          addAction(ActionNames.HELP_ABOUT);
          addAction(ActionNames.HELP_INFO_SYSTEM);
          addAction(ActionNames.HELP_USER_MANUAL);
+         addAction(ActionNames.HELP_TEST_FUNCTION);
          addAction(ActionNames.HELP_LICENSE);
 
       } catch ( Exception e ) {
@@ -300,7 +307,9 @@ public class ActionHandler extends ActionManager {
           
           // if document unmodified, close unchanged
           if (!document.isModified()) {
-        	  closeDocument(document, false, false);
+        	  if (!closeDocument(document, true, false)) {
+        		  return false;
+        	  }
           }
 
           // if file is new (no path) then try to save it (define path)
@@ -322,7 +331,7 @@ public class ActionHandler extends ActionManager {
           }
 
           // add the document's path to the session list
-          if (filepath != null && !document.isBackupCopy()) {
+          if (filepath != null && !Global.isMirrorFilepath(filepath) && !document.isBackupCopy()) {
              sessionList.add(filepath);
           }
       }
@@ -392,8 +401,19 @@ public class ActionHandler extends ActionManager {
       public void run () {
     	 // open and register the document file
          File file = new File(filepath);
-         if (file.isFile() && !Global.getDocumentRegistry().isRegisteredDocument(filepath)) {
-            openDocumentFromPath(filepath, null, controlMirrors);
+         if (file.isFile()) { 
+        	try {
+				if (IO_Manager.get().isFileEncrypted(file)) {
+					synchronized (IO_Manager.get().getOpenLock()) {
+				        openDocumentFromPath(filepath, controlMirrors);
+					}
+				} else {
+		            openDocumentFromPath(filepath, null, controlMirrors);
+				}
+			} catch (IOException e) {
+				e.printStackTrace();
+		        GUIService.infoMessage("dlg.title.fail.loading.file", "msg.failure.open.document", e);
+			}
          }
       }
    }
@@ -465,7 +485,19 @@ public class ActionHandler extends ActionManager {
       
       // end editing and save document preferences
 	  DisplayManager.get().endEditDocument(document);
-      document.savePreferences();
+      document.savePreferences(false);
+      
+      // check whether storage file exists for unmodified document
+      if (saveOption && !document.isModified() && !isBookShelf(document)) {
+    	  String path = document.getExternalPath();
+    	  if (path == null || !new File(path).isFile()) {
+    		  String text = displayText("msg.ask.save.noexternal");
+    		  text = Util.substituteText(text, "$name", document.getShortTitle());
+    		  if (GUIService.userConfirm(text)) {
+    			  document.setModified();
+    		  }
+    	  }
+      }
       
       // obtain user confirmation for saving and save a modified document
       if (saveOption && document.isModified()) {
@@ -536,14 +568,25 @@ public class ActionHandler extends ActionManager {
 		         }
 	   	  	 }
     	  }
-      }
+      } 
 
       // de-register document
       Global.getDocumentRegistry().remove(document);
       return true;
    }
    
-   /** Removes the given document from the GUI display and deletes it in its
+   /** Whether the given document is a member of project internal books.
+    * (These books have no external path defined.)
+    * 
+    * @param document {@code PadDocument}
+    * @return boolean true = document is member of bookshelf
+    */
+   private boolean isBookShelf (PadDocument document) {
+	   String id = document.getUUID().toHexString();
+	   return (id.startsWith("9ff9bcc7")); 
+   }
+
+/** Removes the given document from the GUI display and deletes it in its
     *  persistent storage location.
     *  
     * @param document <code>PadDocument</code>, may be null
@@ -585,7 +628,7 @@ public class ActionHandler extends ActionManager {
 	        	       
 		        	   // remove document from global registers
 		        	   Global.getDocumentRegistry().remove(document);
-		        	   Global.getRecentFilesStack().remove(path);
+//		        	   Global.getRecentFilesStack().remove(path);
 
 		        	   // confirm deletion to user
 		        	   GUIService.infoMessage("dlg.title.filemanager", "confirm.file.deletion");
@@ -606,6 +649,15 @@ public class ActionHandler extends ActionManager {
     */
    public static String displayText (String token) {
 	   return ResourceLoader.get().getDisplay(token);
+   }
+   
+   /** Equivalent to {@code "ResourceLoader.get().getCommand(token)"}.
+    * 
+    * @param token String text token
+    * @return String text or "FIXME" if unknown
+    */
+   public static String commandText (String token) {
+	   return ResourceLoader.get().getCommand(token);
    }
    
    /** Lets the user select a file from the file system and attempts to
@@ -631,6 +683,8 @@ public class ActionHandler extends ActionManager {
    }
    
    /** Opens and returns a pad document from the given path of a local file.
+    * If the file is encrypted and the given key does not match, the user is
+    * requested for input.
     * The open file is registered at the global document registry.
     * Error conditions and unresolved mirror files (optional) are indicated via
     * GUI dialogs. 
@@ -668,6 +722,46 @@ public class ActionHandler extends ActionManager {
       return document;
    }
    
+   /** Opens and returns a pad-document from the given path of a local file.
+    * If the file can be opened it is registered at the global document 
+    * registry. For an encrypted file, already registered documents are
+    * searched for the matching secret key; if the matching key is not found, 
+    * the user is requested for input.
+    * Error conditions and unresolved mirror files (optional) are indicated via
+    * GUI dialogs. 
+    * 
+    * 
+    * @param filepath String file path in local file system
+    * @param controlMirrors boolean if true this method controls mirror files
+    *        after opening the document into display 
+    * @return <code>PadDocument</code> or null if the file could not be
+    *          found or was unable to process
+    */
+   public static PadDocument openDocumentFromPath (String filepath,	boolean controlMirrors) {
+	  Objects.requireNonNull(filepath, "filepath is null");
+      if (filepath.isEmpty()) return null;
+      File file = new File(filepath);
+      PadDocument document = null;
+
+      DocumentRegistry registry = Global.getDocumentRegistry();
+      for (PadDocument doc : registry) {
+    	  byte[] k = doc.getPassphrase();
+    	  if (k != null) {
+    		  try {
+	    		  if (IO_Manager.get().isValidSecretKey(file, k)) {
+	    			  document = openDocumentFromPath(filepath, k, controlMirrors);
+	    			  return document;
+	    		  }
+    	      } catch (IOException e) {
+    	          GUIService.infoMessage("dlg.title.fail.loading.file", "msg.failure.open.document", e);
+    	      }
+    	  }
+      }
+
+	  document = openDocumentFromPath(filepath, null, controlMirrors);
+      return document;
+   }   
+   
    /** Registers the given document at the document registry and thus brings it 
     * to display. Optionally the mirrors for the document are controlled.
     * If the document is already registered, a GUI message is shown and mirrors
@@ -683,14 +777,17 @@ public class ActionHandler extends ActionManager {
 	   Objects.requireNonNull(document);
 	   DocumentRegistry registry = Global.getDocumentRegistry();
 	   try {
-		   if (registry.isRegisteredDocument(document) || registry.isRegisteredDocument(filepath)) {
+		   if (registry.isRegisteredDocument(document.getUUID()) || registry.isRegisteredDocument(filepath)) {
+			   // if document is already registered, reject display (GUI message)
 	           String text = displayText("msg.failure.already.open") + document.getTitle();
 	           GUIService.infoMessage("dlg.title.fail.loading.file", text);
+	           
 		   } else {
+			   // if document is not registered, define filepath + register (-> display)
 			   if (filepath != null) {
 				   IO_Manager.get().setExternalFileReference(document, filepath);
-				   if (!document.isBackupCopy()) {
-					   Global.getRecentFilesStack().push(filepath);
+				   if (document.isBackupCopy()) {
+					   Global.getRecentFilesStack().remove(filepath);
 				   }
 			   }
 			   registry.add(document);
@@ -705,18 +802,24 @@ public class ActionHandler extends ActionManager {
 	    } 
    }
    
-   private String mirrorAdapterIdentifier (PadDocument document) {
+   /** The mirror-adapter identifier is the document's UUID value.
+    * 
+    * @param document {@code PadDocument}
+    * @return String
+    */
+   public String mirrorAdapterIdentifier (PadDocument document) {
 	   return document.getUUID().toHexString();
    }
    
    private void addDocumentToMirrorSystem (PadDocument document) {
+	  Log.log(5, "(ActionHandler.addDocumentToMirrorSystem) adding document to mirror-system: " + document);
       MirrorFileAdapter adapter = new MirrorFileAdapter(document);
       Global.getMirrorFileManager().addMirrorable(adapter);
    }
    
-   private void removeDocumentFromMirrorSystem (PadDocument document) {
-      if (document != null) {
-          Global.getMirrorFileManager().removeMirrorable(mirrorAdapterIdentifier(document));
+   private void removeDocumentFromMirrorSystem (String identifier) {
+      if (identifier != null) {
+          Global.getMirrorFileManager().removeMirrorable(identifier);
       }
    }
    
@@ -726,8 +829,8 @@ public class ActionHandler extends ActionManager {
     */
    public void removeMirrorOfDocument (PadDocument document) {
 	   String name = mirrorAdapterIdentifier(document);
-       Global.getMirrorFileManager().removeCurrentMirror(name);
        Global.getMirrorFileManager().setMirrorableSaved(name);
+       Global.getMirrorFileManager().removeCurrentMirror(name);
    }
 
    /** Removes all history mirrors of the given document in the mirror system.
@@ -805,39 +908,42 @@ public class ActionHandler extends ActionManager {
        }
    } // controlDocumentMirrors
    
-   /** Loads to display the document from the given serialisation file so that
-    * its UUID appears as new and display is set to READ-ONLY. The document
-    * file is not modified by this action, its filepath is not registered and
-    * file mirrors are not checked. A temporary file can be assigned to the
-    * document in which case a copy of the original is registered and can be 
-    * worked on by the user.
+   /** Loads to display a document from the given serialisation file so that
+    * its UUID appears as new (deviant from the original) and its display is set
+    * to READ-ONLY. The document file is not modified by this action, its 
+    * filepath is not registered and its file mirrors are not checked. 
+    * Instead, a temporary file is assigned to the visible document which holds
+    * a copy of the given original, is registered and can be worked on by the 
+    * user.
     * 
-    * @param file File document file to view
-    * @param origDoc original document in case a copy is loaded; may be null
+    * @param file File original document file to view
+    * @param origDoc {@code PadDocument} document from which decryption key
+    * 		 and character encoding is drawn (optional), may be null
     */
    private void viewDocumentAsAlternate (File file, PadDocument origDoc) {
-	  Log.log(10,  "(ActionHandler.viewDocumentAsAlternate) start, source = " + file.getAbsolutePath());
+	  Log.log(10,  "(ActionHandler.viewDocumentAsAlternate) START, source = " + file.getAbsolutePath());
   	  try {
   		 // get information from the original document
   		 byte[] key = origDoc == null ? null : origDoc.getPassphrase();
   		 String encoding = origDoc == null ? null : origDoc.getEncoding();
   		 
-  		 // load the given source file (document) and modify some properties
-		 PadDocument mdoc = IO_Manager.get().openDocument(file, encoding, key);
+		 // store the source document in a temporary file
+		 File dataF = File.createTempFile("npad-", ".tmp");
+		 IO_Manager.get().copyFile(file,  dataF);
+		 
+  		 // load the copy file (document) and modify some properties
+		 PadDocument mdoc = IO_Manager.get().openDocument(dataF, encoding, key);
 		 mdoc.setUUID(new UUID());
 		 mdoc.setReadOnly(true);
 		 mdoc.setBackupFile(file.lastModified());
 		 mdoc.resetModified();
-		 
-		 // store the source document in a temporary file
-		 File dataF = File.createTempFile("npad-", ".tmp");
-		 IO_Manager.get().saveDocument(mdoc, dataF, mdoc.getEncoding());
+//		 IO_Manager.get().saveDocument(mdoc, dataF, mdoc.getEncoding());
 		 
 		 registerAndDisplayDocument(mdoc, dataF.getAbsolutePath(), false);
 	  } catch (Exception e) {
 		 GUIService.failureMessage(null, e);
 	  }
-	  Log.log(10,  "(ActionHandler.viewDocumentAsAlternate) end");
+	  Log.log(10,  "(ActionHandler.viewDocumentAsAlternate) END");
    }
 
    /** Initiates file-save tasks for all modified documents into the worker
@@ -845,6 +951,7 @@ public class ActionHandler extends ActionManager {
     * but returns immediately.
     */
    public void saveAllToFileSystem () {
+	   Global.getStatusBar().clearMessage();
        for (PadDocument doc : Global.getDocumentRegistry()) {
            if (doc.isModified()) {
               scheduleWorkerTask(new SaveDocumentTask(doc), "save document: ".concat(doc.getShortTitle()));
@@ -866,7 +973,7 @@ public class ActionHandler extends ActionManager {
 	  
 	  // save preferences (may be separate from file storage)
 	  DisplayManager.get().endEditDocument(document);
-	  document.savePreferences();
+	  document.savePreferences(false);
 	  
       if (document.isModified()) {
          try {
@@ -878,6 +985,13 @@ public class ActionHandler extends ActionManager {
             File file = IO_Manager.get().saveDocument(document, document.getEncoding());
             if (file == null) return false;
             
+            // reset the MODIFIED property
+            try {
+ 	           document.resetModified();
+ 	        } catch (Throwable e) {
+         	   e.printStackTrace();
+            }
+    
            // remove the mirror file of the document
            removeMirrorOfDocument(document);
            
@@ -887,13 +1001,6 @@ public class ActionHandler extends ActionManager {
            String msg = Util.substituteTextS(text, "$name", document.getShortTitle());
            Global.getStatusBar().putMessage(msg.concat(path), UnixColor.ForestGreen);
            
-           try {
-	           // reset a MODIFIED property
-	           document.resetModified();
-	       } catch (Throwable e) {
-        	   e.printStackTrace();
-           }
-   
            // if user input was involved (new file)
            if (isNewFile) {
 		   	  // remove all history mirrors of the document
@@ -901,10 +1008,10 @@ public class ActionHandler extends ActionManager {
 			  removeFromNewFileList(mirrorAdapterIdentifier(document));
 
               // notify filepath in recent files stack (menu)
-              Global.getRecentFilesStack().push(path);
+//              Global.getRecentFilesStack().push(path);
 
               // repeat saving preferences bc. filepath has been defined
-        	  document.savePreferences();
+        	  document.savePreferences(true);
         	  
               if (confirm) {
             	  // display confirm message
@@ -954,20 +1061,44 @@ public class ActionHandler extends ActionManager {
    private boolean saveDocumentCopy (PadDocument document) {
        PadDocument copy = document.getShallowCopy();
        copy.setBackupFile(0);
-       return saveDocumentToFileSystem(copy, true);
+       boolean ok = saveDocumentToFileSystem(copy, true);
+       if (ok) {
+    	   Global.getRecentFilesStack().remove(copy.getExternalPath());
+       }
+       return ok;
    }
    
+   /** Adds the given identifier of a new document to the new-document-list
+    * in system options. The list remains unmodified if the argument is already 
+    * contained.
+    * 
+    * @param ident String mirror adapter identifier
+    */
+   private void addToNewFileList (String ident) {
+	   Objects.requireNonNull(ident);
+       PersistentOptions options = Global.getOptions();
+       List<String> list = options.getStringList("list-new-docs");
+       if (!list.contains(ident)) {
+     	  list.add(ident);
+          if (options.setStringList("list-new-docs", list)) {
+             Log.debug(6, "(ActionHandler.addToNewFileList) added document UUID to NEW-DOC-LIST (system options): " 
+    	                 + ident);
+          }
+       }
+   }
+
    /** Removes the given identifier of a new document from the new-document-list
     * in system options.
     * 
     * @param ident String mirror adapter identifier
     */
    private void removeFromNewFileList (String ident) {
-       // remove ID-entry in NEW-DOC-LIST (system options)
-       List<String> idlist = Global.getOptions().getStringList("list-new-docs");
+	   Objects.requireNonNull(ident);
+       PersistentOptions options = Global.getOptions();
+       List<String> idlist = options.getStringList("list-new-docs");
        boolean rem;
        do { rem = idlist.remove(ident); } while (rem);
-       if ( Global.getOptions().setStringList("list-new-docs", idlist) ) {
+       if ( options.setStringList("list-new-docs", idlist) ) {
        	   Log.debug(6, "(ActionHandler.removeFromNewFileList) removed document UUID from NEW-DOC-LIST (system options): " 
   	                 + ident);
        }
@@ -1004,7 +1135,7 @@ public class ActionHandler extends ActionManager {
       if (article != null && (document = article.getDocument()) != null &&
     	  clipboardSecurityConfirmed(document)) {
          int index = article.getIndexPosition();
-         PadArticle[] copy = article.getDocument().copyArticlesAt(index);
+         PadArticle[] copy = document.copyArticlesAt(index);
          if (copy.length > 0) {
             articleStack = copy; 
          }
@@ -1180,7 +1311,7 @@ public class ActionHandler extends ActionManager {
  		}
  	}
  	
-   /** Returns whether it is secure to overwrite the clipboard content.
+ 	/** Returns whether it is secure to overwrite the clipboard content.
  * This decision may, but does not have to, involve user interaction.
  *  
  * @return boolean true = save to delete, false = don't delete clipboard
@@ -1359,6 +1490,7 @@ private boolean clipboardSecurityConfirmed (PadDocument document) {
       public static final String ACTION_SORT = "action.sort";
       public static final String ACTION_LINEWRAP_HARD = "action.linewrap.hard";
       public static final String ACTION_DOCUMENT_MODIFY = "action.document.modify";
+      public static final String ACTION_DUPLICATE = "action.duplicate";
       
 
       public static final String ORDER_EDIT_COPY = "order.edit.copy";
@@ -1367,6 +1499,7 @@ private boolean clipboardSecurityConfirmed (PadDocument document) {
       public static final String ORDER_EDIT_DELETE = "order.edit.delete";
       public static final String ORDER_CREATE_CHILD = "order.create.child";
       public static final String ORDER_CREATE_SIBLING = "order.create.sibling";
+      public static final String ORDER_CREATE_DUPL = "order.create.duplicate";
       public static final String TREE_MOVE_UP = "order.move.up";
       public static final String ORDER_MOVE_DOWN = "order.move.down";
       public static final String ORDER_MOVE_INDENT = "order.move.indent";
@@ -1400,6 +1533,7 @@ private boolean clipboardSecurityConfirmed (PadDocument document) {
       public static final String HELP_LICENSE = "help.info.license";
       public static final String HELP_INFO_SYSTEM = "help.info.system";
       public static final String HELP_USER_MANUAL = "help.user.manual";
+      public static final String HELP_TEST_FUNCTION = "debug.test.fct1";
       public static final String HELP_ABOUT = "help.about";
    }
    
@@ -1409,12 +1543,12 @@ private boolean clipboardSecurityConfirmed (PadDocument document) {
       @Override
       public void actionPerformed (ActionEvent evt)  {
          // standard values from GUI elements
-         String cmd = evt.getActionCommand();
-         DocumentRegistry docRegistry = Global.getDocumentRegistry();
-         PersistentOptions options = Global.getOptions();
-         DocumentDisplay display = displayManager.getSelectedDisplay();
-         ArticleEditor editor = display == null ? null : display.getArticleEditor();
-         PadDocument document = display == null ? null : display.getDocument();
+         final String cmd = evt.getActionCommand();
+         final DocumentRegistry docRegistry = Global.getDocumentRegistry();
+         final PersistentOptions options = Global.getOptions();
+         final DocumentDisplay display = displayManager.getSelectedDisplay();
+         final ArticleEditor editor = display == null ? null : display.getArticleEditor();
+         final PadDocument document = display == null ? null : display.getDocument();
          final PadArticle article = display == null ? null : display.getSelectedArticle();
          final DocumentOrderView orderView = display == null ? null : display.getOrderView();
          boolean swt;
@@ -1426,15 +1560,15 @@ private boolean clipboardSecurityConfirmed (PadDocument document) {
          }
          
          else if ( cmd.equals( ActionNames.FILE_NEW ) ) {
-            document = new DefaultPadDocument();
-            docRegistry.add(document);
+            PadDocument doc = new DefaultPadDocument();
+            docRegistry.add(doc);
             Util.sleep(50);
-            document.setModified();
+            doc.setModified();
             
             // request a document name from user
             String name = GUIService.userInput(null, "dlg.title.doc.create", "dlg.enter.doc.title", null);
             if (name != null) {
-            	PadArticle art = document.newArticle(null, true);
+            	PadArticle art = doc.newArticle(null, true);
             	art.setTitle(name);
             }
          }
@@ -1497,7 +1631,7 @@ private boolean clipboardSecurityConfirmed (PadDocument document) {
                   evt.getID());
             SetStackMenu menu = (SetStackMenu)evt.getSource();
             String filepath = (String)menu.getContent()[evt.getID()];
-            openDocumentFromPath(filepath, null, true);
+            openDocumentFromPath(filepath, true);
          }
 
          else if ( cmd.equals( ActionNames.FILE_RELOAD ) ) {
@@ -1638,7 +1772,7 @@ private boolean clipboardSecurityConfirmed (PadDocument document) {
          
          else if ( cmd.equals( ActionNames.EDIT_COLOR_BGD) ) {
 			if (article != null) {
-				Color color = ColorChooserDialog.showDialog(editor.getView(), null, 
+				Color color = ColorChooserDialog.showDialog(null, null, 
 						Global.getBackgroundColorSet(), article.getBackgroundColor());
 				if (color != null) {
 					editor.setBackground(color);
@@ -1648,7 +1782,7 @@ private boolean clipboardSecurityConfirmed (PadDocument document) {
          
          else if ( cmd.equals( ActionNames.EDIT_COLOR_FGR) ) {
 			if (article != null) {
-				Color color = ColorChooserDialog.showDialog(editor.getView(), null, 
+				Color color = ColorChooserDialog.showDialog(null, null, 
 						Global.getBackgroundColorSet(), article.getForegroundColor());
 				if (color != null) {
 					editor.setForeground(color);
@@ -1745,6 +1879,20 @@ private boolean clipboardSecurityConfirmed (PadDocument document) {
             }
          }
 
+         else if ( cmd.equals( ActionNames.ORDER_CREATE_DUPL ) ) {
+        	 if (article != null) {
+        		 int position = article.getIndexPosition();
+        		 PadArticle[] arr = document.copyArticlesAt(position);
+        		 arr[0].setTitle(arr[0].getTitle().concat("'"));
+        		 int newPos = document.getNextSiblingIndex(position);
+        		 if (article.getParent() != null) {
+        			document.insertArticleAt(article.getParent(), newPos, arr);
+          	   	 	document.getUndoManager().addEdit(new DocumentUndoableEdit(
+          	   	 			DocumentEditType.DUPLICATE, document, arr, newPos));
+        		 }
+    		 }
+         }
+         
          else if ( cmd.equals( ActionNames.TREE_MOVE_UP ) ) {
         	PadArticle art = orderView.getSelectedElement();
             if (art != null && orderView.moveUp()) {
@@ -1804,9 +1952,29 @@ private boolean clipboardSecurityConfirmed (PadDocument document) {
          }
 
          else if ( cmd.equals( ActionNames.ORDER_DOC_TOOLBOX ) ) {
-       	    new DialogDocumentToolbox(document).show();
+       	    new DocumentToolboxDialog(document).show();
          }
 
+         else if ( cmd.equals( ActionNames.ACTION_DUPLICATE) ) {
+        	 if (document != null) {
+	        	 String text = displayText("msg.duplicate.document");
+	        	 text = Util.substituteText(text, "$name", document.getShortTitle());
+	        	 if (GUIService.userConfirm(text)) {
+	        		 PadDocument copy = document.getFullCopy();
+	        		 registerAndDisplayDocument(copy, null, false);
+	                 Util.sleep(50);
+	                 copy.setModified();
+	                 
+	                 // request a document name from user
+	                 String name = GUIService.userInput(null, "dlg.title.doc.duplicate", 
+	                		       "dlg.enter.doc.title", copy.getTitle());
+	                 if (name != null) {
+	                	 copy.setTitle(name);
+	                 }
+	        	 }
+        	 }
+         }
+         
          else if ( cmd.equals( ActionNames.ACTION_PRINT ) ) {
             if (document != null && document.getArticleCount() > 0) {
            	   PrintSelectorDialog dlg = new PrintSelectorDialog();
@@ -1826,6 +1994,66 @@ private boolean clipboardSecurityConfirmed (PadDocument document) {
         			sortArticles(article);
         		}
         	}
+         }
+         
+         else if ( cmd.equals( ActionNames.ACTION_SEARCH ) ) {
+             if (document != null && document.getArticleCount() > 0) {
+	        	 TextSearchPanel panel = new TextSearchPanel();
+	        	 if (article == null) {
+	        		 panel.setArticleEnabled(false);
+	        	 }
+	        	 String title = Global.res.getDisplay("dlg.textsearch");
+	        	 boolean ok = MessageDialog.showConfirmMessage(Global.mainframe, title, 
+	        			 panel, DialogButtonBar.OK_CANCEL_BUTTON);
+	    		 String searchVal = panel.getInputText();
+				 int scope = panel.getScope();
+	    		 
+	    		 if (ok && !searchVal.isEmpty()) {
+	    			 // search for text occurrences
+	    			 Log.log(6, "(ActionHandler.Executor) TEXT SEARCH for [" + searchVal + "]");
+	    			 TextSearcher search = new TextSearcher(panel.getMaxSearchResults(),
+	    					 panel.isCaseSensitive(), panel.isWholeWordOnly());
+	    			 List<DocumentTextPosition> posList;
+	    			 switch (panel.getScope()) {
+	    			 case 0:  posList = search.findPositionsInSession(searchVal); break;
+	    			 case 1:  posList = search.findPositionsInDocument(document, searchVal); break;
+	    			 case 2:  posList = search.findPositionsInArticle(article, searchVal); break;
+	    			 default: posList = new ArrayList<>();
+	    			 }
+
+	    			 // process search result
+	    			 if (posList.isEmpty()) {
+	    				 GUIService.infoMessage(null, Global.res.getDisplay("msg.findtext-nothing"));
+//	    				 System.out.println("   -- nothing found!");
+	    				 
+	    			 } else {
+//	    				 // console tracing
+//	    				 System.out.println("results in " + (scope == 0 ? "session" : scope == 1 ? "document" : "article"));
+//		    			 for (DocumentTextPosition pos : posList) {
+//		    				 String hstr = pos.getArticle().getShortTitle();
+//		    				 System.out.println("   -- find position: " + hstr + " :: " + pos.getCursorPos());
+//		    			 }
+		    			 
+		    			 // GUI
+		    			 TextLocationListPanel listPanel = new TextLocationListPanel(posList, searchVal, scope);
+		    			 listPanel.addListSelectionListener(new ListSelectionListener() {
+							@Override
+							public void valueChanged (ListSelectionEvent e) {
+								DocumentTextPosition pos = listPanel.getSelectedItem();
+								if (pos != null) {
+									showDocumentTextPosition(pos, searchVal.length());
+								}
+							}
+						 });
+			        	 title = Global.res.getDisplay("dlg.find-locations");
+		    			 MessageDialog dlg = new MessageDialog(null, title, listPanel, 
+		    					 MessageType.noIcon, DialogButtonBar.CLOSE_BUTTON, false);
+		    			 dlg.setResizable(true);
+		    			 dlg.show();
+		    			 
+	    			 }
+	    		 }
+             }
          }
          
          else if ( cmd.equals( ActionNames.ACTION_SEARCH_WEB ) ||
@@ -1909,46 +2137,104 @@ private boolean clipboardSecurityConfirmed (PadDocument document) {
        		 }
          }
 
+         else if ( cmd.equals( ActionNames.HELP_TEST_FUNCTION ) ) {
+       		 document.setSelectedIndex(5);
+         }
+
 	     // catch left-over errors of any execution    
 	     }  catch (Throwable e) {
 	        GUIService.failureMessage(null, e);
 	        e.printStackTrace();
 	     }
       }
+
+	  protected void showDocumentTextPosition (DocumentTextPosition pos, int length) {
+		PadDocument doc = pos.getDocument();
+		PadArticle art = pos.getArticle();
+		DocumentDisplay display = displayManager.getDisplay(doc);
+		if (display == null) return;
+		displayManager.setSelectedDisplay(display);
+		
+		doc = displayManager.getSelectedDocument();
+		doc.setSelectedArticle(art);
+		ArticleEditor editor = displayManager.getSelectedEditor();
+		editor.setTextSelection(pos.getCursorPos(), pos.getCursorPos() + length);
+	  }
    } // ActionExecutor
 
+   /** This handler listens to the document registry and services the mirror-file
+    * handler.
+    */
    private class MirrorHandler implements PropertyChangeListener {
 
       @Override
       public void propertyChange (PropertyChangeEvent evt) {
          String key = evt.getPropertyName();
+         PadDocument doc = (PadDocument)evt.getNewValue();
+         
          if (key == "documentAdded") { 
-        	// add document to mirror system (if not it is marked as BACKUP)
-            PadDocument doc = (PadDocument)evt.getNewValue();
-            if (doc.isBackupCopy()) return;
-            addDocumentToMirrorSystem(doc);
-            
-            // if document is new (no file reference), note UUID into system options
-            if (doc.getExternalPath() == null) {
-            	PersistentOptions options = Global.getOptions();
-            	List<String> list = options.getStringList("list-new-docs");
-            	list.add(doc.getUUID().toHexString());
-            	options.setStringList("list-new-docs", list);
-            	Log.debug(6, "(ActionHandler.MirrorHandler) added document UUID to NEW-DOC-LIST (system options): " 
-            	          + doc.getShortTitle());
-            }
+        	 add_document_handling(doc);
          }
          else if (key == "documentRemoving") {
-            PadDocument doc = (PadDocument)evt.getNewValue();
       	  	if (!doc.hasExternalFile()) {
       	  		removeHistoryMirrorsOfDocument(doc);
       	  	}
          }
          else if (key == "documentRemoved") {
-            PadDocument doc = (PadDocument)evt.getNewValue();
        	  	removeMirrorOfDocument(doc);
-            removeDocumentFromMirrorSystem(doc);
+            removeDocumentFromMirrorSystem(mirrorAdapterIdentifier(doc));
+         } 
+         else if (key == "documentReplaced") {
+             PadDocument oldDoc = (PadDocument)evt.getOldValue();
+        	 removeMirrorOfDocument(oldDoc);
+             removeDocumentFromMirrorSystem(mirrorAdapterIdentifier(doc));
+        	 add_document_handling(doc);
+         } 
+         else if (key == "documentUuidChanged") {
+        	UUID oldId = (UUID) evt.getOldValue();
+        	UUID newId = doc.getUUID();
+        	String oldIdentifier = oldId.toHexString();
+        	String newIdentifier = newId.toHexString();
+        	
+        	// handle Mirrorable replacement (removes all mirrors of old identity)
+        	MirrorFileManager mirman = Global.getMirrorFileManager();
+        	boolean hadMirror = mirman.getCurrentMirror(oldIdentifier) != null;
+        	mirman.removeHistoryMirrors(oldIdentifier);
+        	mirman.removeCurrentMirror(oldIdentifier);
+        	mirman.removeMirrorable(oldIdentifier);
+        	
+        	mirman.addMirrorable(new MirrorFileAdapter(doc));
+        	if (hadMirror) {
+        		mirman.startMirrorSavingFor(newIdentifier);
+        	}
+        	Log.debug(6,  "(ActionHandler.MirrorHandler) document UUID changed from " + oldIdentifier + " to " + newIdentifier);
+        	
+        	// handle new-document-list changes
+        	boolean noExternalFile = IO_Manager.get().getExternalFileReference(oldId) == null
+        			&& IO_Manager.get().getExternalFileReference(newId) == null;
+        	if (noExternalFile) {
+        		removeFromNewFileList(oldIdentifier);
+        		addToNewFileList(newIdentifier);
+        	}
          }
+      }
+      
+      /** If the given document is not a BACKUP, it is added to the 
+       * file mirror system. What is more, if the document is NEW (has no 
+       * external path) it is added to the new-document-list (Orphan list). 
+       * Does nothing if the document is marked BACKUP.
+       *  
+       * @param doc {@code PadDocument}
+       */
+      private void add_document_handling (PadDocument doc) {
+      	  // add document to mirror system (if not it is marked as BACKUP)
+          if (doc.isBackupCopy()) return;
+          addDocumentToMirrorSystem(doc);
+          
+          // if document is new (no file reference), note UUID into system options
+          if (doc.getExternalPath() == null) {
+        	  addToNewFileList(doc.getUUID().toHexString());
+          }
       }
       
    }
@@ -1969,15 +2255,16 @@ private boolean clipboardSecurityConfirmed (PadDocument document) {
       }
    
       /** Creates an adapter with an empty Treepad document of the given
-      * identifier UUID. This constructor creates the document and is used for
-      * reconstruction processes of NEW DOCUMENTS during program startup.
+      * identifier UUID. This constructor creates a stub for the document and 
+      * is used for reconstruction processes for mirrored NEW DOCUMENTS during 
+      * program startup.
       * 
       * @param id String UUID hexadecimal expression (32 char)
       * @throws IllegalArgumentException if UUID expression is invalid
       */
       public MirrorFileAdapter (String id) {
    	  Objects.requireNonNull(id);
-        document = new DefaultPadDocument(DocumentType.TreePad, new UUID(id));
+         document = new DefaultPadDocument(DocumentType.TreePad, new UUID(id));
       }
   
       @Override
@@ -2000,34 +2287,51 @@ private boolean clipboardSecurityConfirmed (PadDocument document) {
    
       @Override
       public void mirrorWrite (OutputStream out) throws IOException {
-    	 document.savePreferences();
+    	 document.savePreferences(false);
          IO_Manager.get().saveDocument(document, out, document.getEncoding());
          String text = displayText("msg.mirror.written").concat(document.getShortTitle());
-         Global.getStatusBar().putMessage(text, 10000, UnixColor.Indigo);
+         if (Global.isDebug()) {
+        	 Global.getStatusBar().putMessage(text, 10000, UnixColor.Indigo);
+         }
+         Global.getStatusBar().setActivityCellColor(UnixColor.Plum, 3000);
       }
    
       @Override
       public void mirrorsDetected (List<File> files) {
-    	  if (document.hasExternalFile()) return;
+    	  // we operate on mirrors of NEW ORPHAN files (w/o external file) only
+    	  if (document.hasExternalFile() || files.isEmpty()) return;
+    	  String mirName = mirrorAdapterIdentifier(document);
     	  
-    	  // we operate on mirrors of NEW orphan files (w/o external file) only
-    	  // and load them as reconstructions into the display
-    	  if (!files.isEmpty()) {
-    		  File mir = files.get(0);
-    		  
-              // open the document in registry and GUI
-			  document = openDocumentFromPath(mir.getAbsolutePath(), null, false);
+    	  // enter name into Orphan list (new-file-list) as we have a mirror file
+    	  addToNewFileList(mirName);
+	  
+    	  // load youngest mirror as reconstruction into display
+		  File mir = files.get(0);
+		  Log.debug(5, "(ActionHandler.MirrorFileAdapter) mirror reported for ORPHAN doc " + document +", file=" + mir);
+		  
+          // open the mirror document in registry and GUI
+		  // and remove its external reference to make it appear NEW
+		  PadDocument realDoc = openDocumentFromPath(mir.getAbsolutePath(), false);
+		  if (realDoc != null) {
+    		  Log.debug(5, "(ActionHandler.MirrorFileAdapter) mirror installed for ORPHAN doc: -> " + realDoc);
+			  document = realDoc;
 			  String path = document.getExternalPath();
+			  
+			  // remove mirrors of the orphan
+			  Global.getMirrorFileManager().removeHistoryMirrors(mirName);
 			  
 			  // remove unwanted file references
 			  IO_Manager.get().removeExternalFileReference(document);
 			  document.setModified();
 			  Global.getRecentFilesStack().remove(path);
-    	  }
+			  
+			  // create a new mirror for the orphan
+			  Global.getMirrorFileManager().startMirrorSavingFor(mirName);
+		  }
       }
    }
    
-   enum DocumentEditType {CUT, PASTE, DELETE, CREATE, SORT, MOVE_UP, MOVE_DOWN, INDENT, OUTDENT;}
+   enum DocumentEditType {CUT, PASTE, DELETE, CREATE, DUPLICATE, SORT, MOVE_UP, MOVE_DOWN, INDENT, OUTDENT;}
    
    private class DocumentUndoableEdit extends AbstractUndoableEdit {
 	   private DocumentEditType type;
@@ -2073,6 +2377,7 @@ private boolean clipboardSecurityConfirmed (PadDocument document) {
 			break;
 		case CREATE:
 		case PASTE:
+		case DUPLICATE:
 			document.removeArticles(art);
 			break;
 		case INDENT:
@@ -2118,6 +2423,7 @@ private boolean clipboardSecurityConfirmed (PadDocument document) {
 			break;
 		case CREATE:
 		case PASTE:
+		case DUPLICATE:
 			document.insertArticleAt(parent, position, art);
 			document.setSelectedIndex(position);
 			break;
@@ -2146,15 +2452,16 @@ private boolean clipboardSecurityConfirmed (PadDocument document) {
 	public String getPresentationName() {
 		String hs = "";
 		switch (type) {
-		case CUT: hs = "CUT article"; break;
-		case DELETE: hs = "DELETE article"; break;
-		case PASTE: hs = "PASTE article"; break;
-		case CREATE: hs = "CREATE article"; break;
-		case INDENT: hs = "INDENT article"; break;
-		case MOVE_DOWN: hs = "MOVE-DOWN article"; break;
-		case MOVE_UP: hs = "MOVE-UP article"; break;
-		case OUTDENT: hs = "OUTDENT article"; break;
-		case SORT: hs = "SORT article"; break;
+		case CUT: hs = commandText("order.edit.cut.undo"); break;
+		case DELETE: hs = commandText("order.edit.delete.undo"); break;
+		case PASTE: hs = commandText("order.edit.paste.undo"); break;
+		case CREATE: hs = commandText("order.create.article.undo"); break;
+		case DUPLICATE: hs = commandText("order.duplicate.article.undo"); break;
+		case INDENT: hs = commandText("order.move.indent.undo"); break;
+		case MOVE_DOWN: hs = commandText("order.movedown.undo"); break;
+		case MOVE_UP: hs = commandText("order.moveup.undo"); break;
+		case OUTDENT: hs = commandText("order.move.outdent.undo"); break;
+		case SORT: hs = commandText("order.sort.undo"); break;
 		}
 		return hs;
 	}
@@ -2164,28 +2471,21 @@ private boolean clipboardSecurityConfirmed (PadDocument document) {
 
    /** Controls the given list of document identifiers for mirror occurrences
     * and opens these mirrors as new documents (lacking an external file 
-    * definition) into the display. At this time the mirrors will not be removed.
-    * (The mirrors will only be removed when these documents are saved to files.)
+    * definition) into display. At this time the mirrors will not be removed.
     *   
     * @param olist {@code List<String>} list of hexadecimal string values
     */
 	public void controlOrphanMirrors (List<String> olist) {
-		MirrorFileManager man = Global.getMirrorFileManager();
+		MirrorFileManager manager = Global.getMirrorFileManager();
 		for (String oid : olist) {
 			// adds a special Mirrorable for orphans
 			// this will trigger reactions (callback method) which ensure
 			// treatment of orphan mirrors
+			removeFromNewFileList(oid);
 			Mirrorable mirable = new MirrorFileAdapter(oid);
-			boolean added = man.addMirrorable(mirable);
+			boolean added = manager.addMirrorable(mirable);
 
-			// if no history mirrors are available for the orphan entry 
-			if (man.getHistoryMirrors(oid).isEmpty()) {
-                // remove ID-entry in NEW-DOC-LIST (system options)
-				removeFromNewFileList(oid);
-                
-                // remove orphan Mirrorable
-//                man.removeMirrorable(oid);
-			} else if (added) {
+			if (added) {
 	     	    Log.debug(6, "(ActionHandler.controlOrphanMirrors) added ORPHAN mirror adapter for document UUID from NEW-DOC-LIST (system options): " 
 	 	                 + oid);
 			}
@@ -2193,29 +2493,62 @@ private boolean clipboardSecurityConfirmed (PadDocument document) {
 	}
 
 /** Reloads the given document and returns the new instance or null if the
- * loading failed.
+ * loading failed. The reloaded document keeps the UUID from the currently
+ * registered document. If the displayed document is modified, a warning message 
+ * is presented to the user with an option for cancellation. Does nothing if 
+ * the document is not showing or has no external file defined. 
  * 	
  * @param document {@code PadDocument}
- * @return {@code PadDocument}
+ * @return {@code PadDocument} or null
+ * @throws IOException 
  */
 public PadDocument reloadDocument (PadDocument document) {
-	if (!document.hasExternalFile()) return null;
+	if (!document.hasExternalFile() || !DisplayManager.get().isDocumentShowing(document)) return null;
 	boolean ok = true;
+	
 	if (document.isModified()) {
 		// inform user about dangers and ask to confirm reloading
 		String title = displayText("dlg.title.reload");
 		title = Util.substituteText(title, "$name", document.getShortTitle());
-		String text = displayText("msg.ask.reloading.doc"); 
-		ok = GUIService.userConfirm(title, text);
+//		String text = displayText("msg.ask.reloading.doc"); 
+		ok = GUIService.userConfirm(title, "msg.ask.reloading.doc");
 	}
+	
 	if (ok) {
 		// reload the document (losing modifications)
 		int selected = document.getSelectedIndex();
-		String path = document.getExternalPath();
-		closeDocument(document, false, false);
-		document = openDocumentFromPath(path, document.getPassphrase(), false);
-		document.setSelectedIndex(selected);
-		return document; 
+		UUID uuid = document.getUUID();
+		File file = document.getFile();
+//		closeDocument(document, false, false);
+		
+        // re-open the document
+        try {
+        	PadDocument newDoc = IO_Manager.get().openDocument(file, 
+        			             document.getEncoding(), document.getPassphrase());
+        	newDoc.setBackupFile(document.getBackupTime());
+        	newDoc.setUUID(uuid);
+    		newDoc.setSelectedIndex(selected);
+			Global.getDocumentRegistry().replaceDocument(document, newDoc);
+//        	DisplayManager.get().getDisplay(document).setDocument(newDoc);
+//			document = IO_Manager.get().openDocument(new File(path), document.getPassphrase());
+			String text = displayText("msg.document.reloaded");
+			text = Util.substituteText(text, "$doc", document.getShortTitle());
+			text = Util.substituteText(text, "$time", Util.localeTimeString(file.lastModified()));
+			Global.getStatusBar().putMessage(text);
+    		return newDoc;
+    		
+		} catch (InterruptedException | IOException e) {
+			GUIService.failureMessage("loadfailure", e);
+//			return null;
+		}
+//        if (document != null) {;
+//        	// register document 
+//    		document.setUUID(uuid);
+//        	registerAndDisplayDocument(document, path, false);
+//    		document.setSelectedIndex(selected);
+//    		return document; 
+//        }
+//		document = openDocumentFromPath(path, document.getPassphrase(), false);
 	}
 	return null;
 }

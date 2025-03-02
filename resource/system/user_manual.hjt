@@ -70,17 +70,19 @@ Editor Keys
 
 Editor Keys are shortcut commands which can be given through special keys on the keyboard.
 
+ALT-D 	current local date (locale notation)
+ALT-T 	current local time (locale notation)
+CTRL-D 	current local date (universal notation)
+CTRL-T 	current local time (universal notation)
+CTRL-U 	universal date and time
+
 CTRL-W	select word
 CTRL-L 	select line
 CTRL-P 	select paragraph
 CTRL-Z 	undo
 CTRL-SHIFT-Z 	redo
 CTRL-Y 	redo
-CTRL-D 	current local date (universal notation)
-CTRL-T 	current local time (universal notation)
-CTRL-E 	current local date (locale notation)
-CTRL-F 	current local time (locale notation)
-CTRL-U 	universal date and time
+
 CTRL-PLUS 	increase font size
 CTRL-MINUS 	decrease font size
 

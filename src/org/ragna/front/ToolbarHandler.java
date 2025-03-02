@@ -78,7 +78,9 @@ public class ToolbarHandler {
          ActionHandler.ActionNames.ORDER_MOVE_INDENT + "," +
          ActionHandler.ActionNames.ORDER_MOVE_OUTDENT + "," +
          ActionHandler.ActionNames.ORDER_CREATE_CHILD + "," +
-         ActionHandler.ActionNames.ORDER_CREATE_SIBLING + "," +
+         ActionHandler.ActionNames.ORDER_CREATE_SIBLING + "," + 
+//         ActionHandler.ActionNames.ORDER_CREATE_DUPL + "," +
+         
          ActionHandler.ActionNames.ORDER_EDIT_COPY + "," +
          ActionHandler.ActionNames.ORDER_EDIT_CUT + "," +
          ActionHandler.ActionNames.ORDER_EDIT_PASTE + "," +
@@ -375,26 +377,21 @@ public class ToolbarHandler {
 			  String name = evt.getPropertyName();
 			  PadDocument document = (PadDocument)evt.getNewValue(); 
 			  
-			  if ("documentAdded".equals(name)) {
-//				  document.addPropertyChangeListener(this);
-				  runDocumentModified(document);
+			  if ("documentAdded".equals(name) || "documentRemoved".equals(name) ||
+				  "documentModified".equals(name) || "documentSelected".equals(name) ||
+				  "documentReplaced".equals(name)) {
+				  runModifiedControl(document);
 			  } 
-			  else if ("documentRemoved".equals(name)) {
-//				  document.removePropertyChangeListener(this);
-				  runDocumentModified(document);
-			  }
-			  else if ("documentModified".equals(name) || "documentSelected".equals(name)) {
-				  runDocumentModified(document);
-			  }
 		  }
 	  }
    }
 
-   public void runDocumentModified (PadDocument document) {
+   public void runModifiedControl (PadDocument document) {
 	   int nrMod = Global.getDocumentRegistry().numberModified();
+	   boolean isSelected = Global.getDocumentRegistry().isSelectedDocument(document);
        try {
 		  Action a = ActionHandler.get().getAction(ActionHandler.ActionNames.FILE_SAVE);
-		  a.setEnabled(document != null && document.isModified());
+		  a.setEnabled(isSelected && document.isModified());
 		  a = ActionHandler.get().getAction(ActionHandler.ActionNames.FILE_SAVE_ALL);
 		  a.setEnabled(nrMod > 0);
        } catch (UnknownActionException e) {

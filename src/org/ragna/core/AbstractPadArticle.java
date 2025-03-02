@@ -92,6 +92,7 @@ public class AbstractPadArticle implements PadArticle, Cloneable {
 	  // set a default title
 	  String title = "article ".concat(String.valueOf(counterValue));
       setTitle(title);
+      lineWrap = Global.getOptions().isOptionSet("defaultEditorLinewrap");
       
       // create editor document according to parameter
       if (type == ArticleType.HTMLText) {
@@ -265,6 +266,7 @@ public class AbstractPadArticle implements PadArticle, Cloneable {
          AbstractPadArticle clone = (AbstractPadArticle)clone();
          clone.uuid = new UUID();
          clone.documentListener = clone.new DocumentListener();
+         clone.editorListener = clone.new EditorListener();
          clone.support = new PropertyChangeSupport(clone);
          clone.editorVisibleRect = new Rectangle(editorVisibleRect);
          

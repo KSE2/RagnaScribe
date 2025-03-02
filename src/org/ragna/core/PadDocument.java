@@ -26,6 +26,7 @@ package org.ragna.core;
 import java.awt.Color;
 import java.awt.Font;
 import java.beans.PropertyChangeListener;
+import java.io.File;
 import java.util.Iterator;
 
 import javax.swing.AbstractListModel;
@@ -71,17 +72,20 @@ public interface PadDocument extends Iterable<PadArticle> {
     */
    String getTitle ();
 
-   /** Sets the title for this document.
+   /** Sets the title for this document. If the title changed a
+    * "titleChanged" property change event is issued.
     * 
     * @param title String, may be null
     */
    void setTitle (String title);
    
-   /** Sets the short title for this document.
+   /** Sets the short title for this document. If the short-title changed a
+    * "titleChanged" property change event is issued.
     * 
     * @param title String, may be null
+    * @return boolean true = short title changed, false = short title unchanged 
     */
-   void setShortTitle (String title);
+   boolean setShortTitle (String title);
    
    /** Returns the human readable short title for this document
     * or null if no short title has been defined.
@@ -101,7 +105,7 @@ public interface PadDocument extends Iterable<PadArticle> {
    /** Returns the path definition of a serialisation file for  this document
     * or null if no such path is defined.
     * 
-    * @return String external filepath
+    * @return String external filepath or null
     */
    String getExternalPath ();
    
@@ -304,6 +308,13 @@ public interface PadDocument extends Iterable<PadArticle> {
     */
    DocumentType getDocType ();
    
+   /** The external storage file of this document or null if there is no path
+    * defined.
+    * 
+    * @return File or null
+    */
+   File getFile ();
+   
    /** Returns the system file type of this pad-document.
     *  
     * @return <code>SystemFileType</code>
@@ -345,8 +356,19 @@ public interface PadDocument extends Iterable<PadArticle> {
     */
    UndoManager getUndoManager ();
    
+   /** Adds a property change listener to this document for all properties.
+    * Any argument is only added once.
+    * 
+    * @param listener {@code PropertyChangeListener}
+    */
    void addPropertyChangeListener (PropertyChangeListener listener);
    
+   /** Adds a property change listener to this document, bound to the given
+    * property name. Any combination of arguments is only added once.
+    * 
+    * @param property String 
+    * @param listener {@code PropertyChangeListener}
+    */
    void addPropertyChangeListener (String property, PropertyChangeListener listener);
 
    void removePropertyChangeListener (PropertyChangeListener listener);
@@ -417,7 +439,7 @@ public interface PadDocument extends Iterable<PadArticle> {
     */
    void addArticle (PadArticle article, int index, boolean child);
    
-   /** Adds a series of articles to this document at a position stating with 
+   /** Adds a series of articles to this document at a position starting with 
     * 'index' + 1. 'index' must denote an existing element or otherwise be -1 
     * for starting with the root node. The root node has index value 0.
     * <p>The given articles can be added as children or siblings to the article 
@@ -464,6 +486,13 @@ public interface PadDocument extends Iterable<PadArticle> {
     */
    PadDocument getShallowCopy ();
    
+   /** Returns a deep clone of this document with all article data copied in new
+    * instances and listeners stripped off. The result bears a new UUID. 
+    *  
+    * @return <code>PadDocument</code>
+    */
+   PadDocument getFullCopy ();
+   
    /** Returns an array of articles starting with the article at the given index
     * and stretching to all of its descendant articles. The returned articles
     * are unmodified originals as stored in the document.
@@ -482,6 +511,15 @@ public interface PadDocument extends Iterable<PadArticle> {
     * @throws IndexOutOfBoundsException
     */
    PadArticle[] getChildrenOf (int index);
+   
+   /** Returns the insertion index of the next sibling to the given index.
+    * The value ranges from zero to {@code getArticleCount()}. The 
+    * length-of-list is an unreal but valid insertion position.
+    * 
+    * @param index int index of an existing article 
+    * @return int sibling index
+    */
+   int getNextSiblingIndex (int index);
    
    /** Returns the depth of the article branch starting with the given index.
     * A value of zero indicates the article has no child, 1 means it has
@@ -643,7 +681,8 @@ public interface PadDocument extends Iterable<PadArticle> {
    String getEncoding ();
 
    /** Sets the character-set used to serialise this document.
-    * There are no controls performed on the value.
+    * There are no controls performed on the value. It is undefined whether
+    * this document becomes "modified" by changing this setting.
     * 
     * @param charset String
     */
@@ -693,9 +732,12 @@ public interface PadDocument extends Iterable<PadArticle> {
 
    TreeModel getTreeModel();
 
-   /** Save document preferences if they are modified. 
+   /** Save document preferences if they are modified or if called as
+    * unconditional.
+    * 
+    *  @param unconditional boolean true = always save, false = save if modified
     */
-   void savePreferences();
+   void savePreferences(boolean unconditional);
 
    /** Annihilates the document preferences. This should be called when the
     * document file is deleted and the document removed.

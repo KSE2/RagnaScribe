@@ -1,0 +1,59 @@
+Project Ragna Scribe
+CHANGELOG 
+
+*** Release V 1-2-1 ***, 05 May 2024
+Changes since version 1-2-0
+
+NEW FEATURES:
+Discovered weaknessses in the underlying encryption tools have been
+removed. Entropy of random number generation is increased, which improves
+quality and security of encryption. Note: Encrypted files stored with this
+version cannot be opened in previous versions (new encrypted file format).
+
+*** Release V 1-2-0 ***, 26 March 2024
+Changes since version 1-1-0
+
+NEW FEATURES:
+Text search is implemented which offers different modes 
+(case sensitivity, whole words) and 3 scopes of investigation.
+The result is a list of find-positions which allows to move to the
+text locations quickly. CTRL-F activates the search function.
+The library for file encryption is upgraded and offers enhanced
+randomness (entropy) for internal value generations, resulting in
+enhanced security.
+
+BUG FIXES: 
+Corrected an error condition for file paths larger than length 80, which
+rendered the document disabled for IO operation.
+Some shortcut keys (menu) have be reassigned to new codes as they 
+conflicted with shortcuts of the text editor.
+
+*** Release V 1-1-0 ***, 04. Jan. 2024
+Changes since version 1-0-0
+
+BUG FIXES: 
+-- Corrected malfunctioning of saving and loading files under Java versions
+above 8 (JAXB exceptions). 
+-- Corrected erroneous appearance of German menu texts in JVM with default 
+charset different to UTF-8. 
+-- Applied internationalisation for undo/redo texts. 
+-- Selected article is now correctly memorised over sessions.
+-- The behaviour of file history storage has been greatly enhanced and
+renders more accurate time-slot service.
+-- accidential feature storage failure in copied articles has been corrected
+    
+NEW FEATURES:
+-- New option in global preferences to set feature 'linewrap' in text editor
+(boolean) by default. New articles assume value 'true' if this option is set,
+otherwise they assume the value of their predecessor in the document.
+-- Improvements in Document Toolbox: a new UUID can be assigned for the 
+document via button. Security and mechanism of "Reload" function improved.
+Modifications in the toolbox are now reversible by leaving the dialog via
+"Cancel" button. 
+-- The "mirror saved" message (status-line) has been transformed into a light 
+phenomenon of the status bar's activity box. 
+-- Documents and articles can be duplicated by menu commands. 
+-- Passwords of open encrypted files are automatically attempted when opening
+files from the previous session list.
+
+

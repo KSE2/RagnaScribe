@@ -25,6 +25,8 @@ package org.ragna.front;
 
 import java.awt.Color;
 import java.awt.event.ActionEvent;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
 import java.io.IOException;
 import java.util.List;
 
@@ -33,8 +35,10 @@ import javax.swing.Action;
 import javax.swing.BorderFactory;
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
+import javax.swing.KeyStroke;
 import javax.swing.text.Document;
 import javax.swing.text.JTextComponent;
+import javax.swing.text.Keymap;
 
 import org.ragna.core.ActionHandler;
 import org.ragna.core.Global;
@@ -50,8 +54,8 @@ import kse.utilclass.misc.UnixColor;
 
 public class PlainTextEditor extends AmpleTextArea implements ArticleEditor {
 
-	private static final Color BRIGHT_CARET_COLOR = UnixColor.Gainsboro;
-	private static final Color DARK_CARET_COLOR = Color.GRAY;
+	private static final Color BRIGHT_CARET_COLOR = UnixColor.LightGrey;
+	private static final Color DARK_CARET_COLOR = UnixColor.Indigo;
 	
 	public PlainTextEditor (String name) {
 		super (name);
@@ -101,6 +105,29 @@ public class PlainTextEditor extends AmpleTextArea implements ArticleEditor {
         setBorder(BorderFactory.createEmptyBorder(10, 10, 0, 0));
         setExecutor(ActionHandler.get().getExecutor());
         
+        defineMenuActions();
+        defineKeys();
+	}
+	
+	private void defineKeys() {
+		Keymap map = getKeymap();
+		
+		// replace the default key binding from CTR-E to ALT-D 
+		KeyStroke key = KeyStroke.getKeyStroke( KeyEvent.VK_E, InputEvent.CTRL_MASK );
+		Action action = map.getAction(key);
+		map.removeKeyStrokeBinding(key);
+		KeyStroke key2 = KeyStroke.getKeyStroke( KeyEvent.VK_D, InputEvent.ALT_MASK );
+		map.addActionForKeyStroke(key2, action);
+		
+		// replace the default key binding from CTR-F to ALT-T 
+		key = KeyStroke.getKeyStroke( KeyEvent.VK_F, InputEvent.CTRL_MASK );
+		action = map.getAction(key);
+		map.removeKeyStrokeBinding(key);
+		key2 = KeyStroke.getKeyStroke( KeyEvent.VK_T, InputEvent.ALT_MASK );
+		map.addActionForKeyStroke(key2, action);
+	}
+
+	private void defineMenuActions() {
         // define a separate PRINT action to branch into DispayManager print method
         Action action = new  AbstractAction(getIntl(ACTION_PRINT)) {
 			@Override
@@ -131,23 +158,18 @@ public class PlainTextEditor extends AmpleTextArea implements ArticleEditor {
 		} catch (UnknownActionException e1) {
 		}
 	}
-	
+
 	@Override
 	public JTextComponent getView() {
 		return this;
 	}
 
 	@Override
-	public int getCaretPosition () {
-		return super.getCaretPosition();
-	}
-
-	@Override
-	public void setForeground(Color fg) {
-		super.setForeground(fg);
+	public void setBackground (Color bgd) {
+		super.setBackground(bgd);
 		
-		int bright = (fg.getRed() + fg.getGreen() + fg.getBlue()) / 3;
-		Color cc = bright > 383 ? BRIGHT_CARET_COLOR : DARK_CARET_COLOR;
+		int bright = bgd.getRed() + bgd.getGreen() + bgd.getBlue();
+		Color cc = bright > 320 ? DARK_CARET_COLOR : BRIGHT_CARET_COLOR;
 		setCaretColor(cc);
 	}
 
@@ -238,6 +260,12 @@ public class PlainTextEditor extends AmpleTextArea implements ArticleEditor {
 			dlg.show();
 		}
 		
+	}
+
+	@Override
+	public void setTextSelection (int start, int end) {
+		grabFocus();
+		select(start, end);
 	}
 	
 }

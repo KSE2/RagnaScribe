@@ -109,6 +109,7 @@ public class Ragna extends MightyFrame {
 
    private void showProgramTitle (PadDocument document) {
       String docTitle = "";
+      StringBuffer sbuf = new StringBuffer();
       if (document != null) {
          docTitle = document.getTitle();
 
@@ -119,15 +120,23 @@ public class Ragna extends MightyFrame {
             String path = IO_Manager.get().getExternalFileReference(document.getUUID());
             docTitle = path == null ? docTitle : path;  
          }
-         
+
+         // prefix symbol if document is encrypted
+         if (document.isEncrypted()) {
+            sbuf.append("@");
+         }
          // prefix asterisk if document is modified
          if (document.isModified()) {
-            docTitle = "* ".concat(docTitle);
+             sbuf.append("*");
          }
+         if (sbuf.length() > 0) {
+        	 sbuf.append("  ");
+         }
+         sbuf.append(docTitle);
       }
       
       // render and show new title
-      String newTitle = titleTrunk.concat(docTitle);
+      String newTitle = titleTrunk.concat(sbuf.toString());
       setTitle(newTitle);
    }
    
@@ -142,7 +151,7 @@ public class Ragna extends MightyFrame {
    }
 
 private class PropertyListener implements PropertyChangeListener {
-     PadDocument liDocument;
+     PadDocument liDoc;
 
      @Override
      public void propertyChange (PropertyChangeEvent evt) {
@@ -155,23 +164,24 @@ private class PropertyListener implements PropertyChangeListener {
            showProgramTitle(document);
            
            // remove a previous document from listener
-           if (liDocument != null) {
-              liDocument.removePropertyChangeListener("documentModified", this);
-              liDocument.removePropertyChangeListener("titleChanged", this);
+           if (liDoc != null) {
+              liDoc.removePropertyChangeListener("documentModified", this);
+              liDoc.removePropertyChangeListener("titleChanged", this);
            }
            
            // listen to selected document
            if (document != null) {
-              liDocument = document;
-              liDocument.addPropertyChangeListener("documentModified", this);
-              liDocument.addPropertyChangeListener("titleChanged", this);
+              liDoc = document;
+              liDoc.addPropertyChangeListener("documentModified", this);
+              liDoc.addPropertyChangeListener("titleChanged", this);
            }
 
            // reaction to DOCUMENT events
         }  else if (key == "documentModified") {
-           showProgramTitle(liDocument);
+           showProgramTitle(liDoc);
+           
         }  else if (key == "titleChanged") {
-           showProgramTitle(liDocument);
+           showProgramTitle(liDoc);
         }
     }
   }

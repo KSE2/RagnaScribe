@@ -48,6 +48,7 @@ public class DefaultOptions extends Properties {
       setProperty("useDefaultFileExtensions", "true");
       setProperty("useFileHistory", "true");
       setProperty("useMirroring", "true");
+      setProperty("defaultEditorLinewrap", "true");
       setProperty("showFilePathInsteadOfTitle", "false");
       setProperty("isAutoOpenRecentFile", "true");
       setProperty("isAutoOpenSession", "false");

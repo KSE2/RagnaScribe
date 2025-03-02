@@ -43,7 +43,6 @@ import javax.swing.JSpinner;
 import javax.swing.JTextField;
 import javax.swing.SpinnerNumberModel;
 
-import org.jpws.pwslib.global.Log;
 import org.ragna.core.Global;
 import org.ragna.front.util.ButtonBarDialog;
 import org.ragna.front.util.DefaultButtonBarListener;
@@ -53,6 +52,7 @@ import org.ragna.util.PersistentOptions;
 
 import kse.utilclass.gui.BoxedFlowLayout;
 import kse.utilclass.gui.VerticalFlowLayout;
+import kse.utilclass.misc.Log;
 import kse.utilclass.misc.UnixColor;
 import kse.utilclass.misc.Util;
 
@@ -77,6 +77,7 @@ public class PreferencesDialog extends ButtonBarDialog {
 	JComboBox<String>		padEncodingCmb;
 	JCheckBox				mirrorChk;
 	JCheckBox				historyChk;
+	JCheckBox				linewrapChk;
 	JSpinner				workerSpin;
 	JLabel					histDirLab;
 	JButton					histDirBut;
@@ -136,18 +137,19 @@ public class PreferencesDialog extends ButtonBarDialog {
 		panel.add(workerSpin);
 		pane.add(panel);
 		
-		// file history check
 		panel = new JPanel(new VerticalFlowLayout());
-		historyChk = new JCheckBox(displayText("prefbox.history-files"));
-		historyChk.setIconTextGap(12);
-		historyChk.setOpaque(true);
+		
+		// file history check
+		historyChk = createCheckboxOption("prefbox.history-files");
 		panel.add(historyChk);
 		
 		// mirror usage check
-		mirrorChk = new JCheckBox(displayText("prefbox.file-mirroring"));
-		mirrorChk.setIconTextGap(12);
-		mirrorChk.setOpaque(true);
+		mirrorChk = createCheckboxOption("prefbox.file-mirroring");
 		panel.add(mirrorChk);
+
+		// default LINEWRAP check
+		linewrapChk = createCheckboxOption("prefbox.linewrapping");
+		panel.add(linewrapChk);
 
 		pane.add(panel);
 		
@@ -199,6 +201,18 @@ public class PreferencesDialog extends ButtonBarDialog {
 		return b;
 	}
 	
+	/** Creates and returns a formatted check-box for in-panel options.
+	 * 
+	 * @param text String display text or resource token
+	 * @return {@code JCheckBox}
+	 */
+	JCheckBox createCheckboxOption (String text) {
+		JCheckBox box = new JCheckBox(ResourceLoader.get().codeOrRealDisplay(text));
+		box.setIconTextGap(12);
+		box.setOpaque(true);
+		return box;
+	}
+	
 	/** Reads system options into dialog elements.
 	 */
 	private void readValues () {
@@ -225,6 +239,7 @@ public class PreferencesDialog extends ButtonBarDialog {
 		// mirroring and history
 		mirrorChk.setSelected(options.isOptionSet("useMirroring"));
 		historyChk.setSelected(options.isOptionSet("useFileHistory"));
+		linewrapChk.setSelected(options.isOptionSet("defaultEditorLinewrap"));
 		
 		// history directory
 		hs = Global.getHistoryDirectory().getAbsolutePath();
@@ -267,6 +282,7 @@ public class PreferencesDialog extends ButtonBarDialog {
 		// mirroring and history files
 		options.setOption("useMirroring", mirrorChk.isSelected());
 		options.setOption("useFileHistory", historyChk.isSelected());
+		options.setOption("defaultEditorLinewrap", linewrapChk.isSelected());
 		
 		// history directory
 		try {

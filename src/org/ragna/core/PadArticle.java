@@ -46,6 +46,7 @@ import kse.utilclass.misc.UUID;
  * <tr><td>titleChanged</td><td><code>PadArticle</code></td><td><code>null</code></td><td>title value changed</td></tr>
  * <tr><td>dataTypeChanged</td><td><code>PadArticle</code></td><td><code>null</code></td><td>new type of editor-document was selected</td></tr>
  * <tr><td>layoutChanged</td><td><code>PadArticle</code></td><td><code>null</code></td><td>some setting for GUI layout changed</td></tr>
+ * <tr><td>selectionChanged</td><td><code>PadArticle</code></td><td><code>null</code></td><td>text selection changed (programmatically)</td></tr>
  * <tr><td>orderChanged</td><td><code>PadArticle</code></td><td><code>null</code></td><td>relation of article to other articles changed</td></tr>
  * 
  * </table> 

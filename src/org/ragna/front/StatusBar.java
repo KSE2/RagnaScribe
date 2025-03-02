@@ -27,7 +27,9 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.util.Objects;
 import java.util.Queue;
+import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ArrayBlockingQueue;
 
@@ -36,7 +38,6 @@ import javax.swing.Icon;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 
-import org.ragna.core.Global;
 import org.ragna.front.util.ResourceLoader;
 
 import kse.utilclass.misc.Log;
@@ -48,19 +49,20 @@ import kse.utilclass.misc.Log;
  *  
  *  <p>StatusBar operates display activity safely on the EDT. 
  */
-public class StatusBar extends JPanel
-{
+public class StatusBar extends JPanel {
+	
    /** Max. message display duration time; 30 seconds. */
    public static final int MAX_TEXT_DISPLAY_TIME = 30000;
    public static final int MIN_TEXT_DISPLAY_TIME = 4000;
    public static final int MSG_QUEUE_CAPACITY = 100;
    public static final Color DEFAULT_TEXT_COLOR = Color.BLACK;;
-   
    public static final int ACTIVE = 1;
    public static final int PASSIVE = 0;
    
-   /** Internal marker for operating the SwingUtilities block. */
-   private enum OperationType { message, counter, dataformat, activity, font }; 
+   private static Timer timer;
+   
+   /** Marker to identify the operation target for this status-bar. */
+   private enum OperationType { message, counter, dataformat, activity, font, activeCell }; 
 
    private Queue<MessageOrder> msgQueue = 
                     new ArrayBlockingQueue<MessageOrder>(MSG_QUEUE_CAPACITY);
@@ -69,10 +71,12 @@ public class StatusBar extends JPanel
    private JLabel          textField = new JLabel();
    private JLabel          activeLabel = new JLabel();
    private JLabel          formatLabel = new JLabel();
-   private JLabel          reccountLabel = new JLabel();
+   private JLabel          counterLabel = new JLabel();
    private RemoverTask     statusTextRemover;
-   private MessageOrder    currentOrder;
+   private RemoverTask     activeCellRemover;
+   private MessageOrder    currentMsgOrder;
    private Color           defaultTextColor = DEFAULT_TEXT_COLOR;
+   private Color           defaultBgdColor = getBackground();
    private int             maxTextDisplayTime = MAX_TEXT_DISPLAY_TIME;
    private int             minTextDisplayTime = MIN_TEXT_DISPLAY_TIME;
    private int		   	   activityDisplayed;
@@ -101,6 +105,7 @@ private void init () {
    rightPanel.add( panel, BorderLayout.EAST );
 
    // program activity icon
+   activeLabel.setOpaque(true);
    panel.add( activeLabel, BorderLayout.EAST );
    activeLabel.setPreferredSize( new Dimension( 22, 16 ) );
    activeLabel.setBorder( BorderFactory.createCompoundBorder(  
@@ -108,9 +113,9 @@ private void init () {
          BorderFactory.createEmptyBorder( 2, 3, 2, 0 ) ));
    
    // record counter cell
-   panel.add( reccountLabel, BorderLayout.CENTER );
-   reccountLabel.setVisible( false );
-   reccountLabel.setBorder( BorderFactory.createCompoundBorder(  
+   panel.add( counterLabel, BorderLayout.CENTER );
+   counterLabel.setVisible( false );
+   counterLabel.setBorder( BorderFactory.createCompoundBorder(  
          BorderFactory.createMatteBorder( 1, 0, 1, 1, Color.gray ),
          BorderFactory.createEmptyBorder( 2, 4, 2, 4 ) ));
 
@@ -122,6 +127,15 @@ private void init () {
          BorderFactory.createEmptyBorder( 2, 4, 2, 4 ) ));
    
 }  // init
+
+/** Sets the {@code Timer} thread for this status-bar. If the value is null
+ * this class will create its own timer.
+ * 
+ * @param timer {@code Timer}, may be null
+ */
+public static void setTimer (Timer timer) {
+	StatusBar.timer = timer;
+}
 
 /** Drops a text message into the status line.
  * 
@@ -176,7 +190,7 @@ public synchronized void putMessage ( String text, int time, Color textColor ) {
          
          // calculate remaining display time of current message
          int alreadyShowing = (int)(System.currentTimeMillis() - 
-                               currentOrder.getCreationTime());
+                               currentMsgOrder.getCreationTime());   // FIXME something wrong?
          int restTime = minTextDisplayTime - alreadyShowing;
    
          // if time has run out ..
@@ -191,8 +205,8 @@ public synchronized void putMessage ( String text, int time, Color textColor ) {
 //            Log.log(10, "(StatusBar.putMessage) -- STORE-TO-QUEUE (rest-time = " +
 //                        restTime + "), text=".concat(text));
             if ( msgQueue.offer(order) ) {
-               statusTextRemover = new RemoverTask();
-               Global.getTimer().schedule( statusTextRemover, restTime );
+               statusTextRemover = new RemoverTask(0);
+               getTimer().schedule( statusTextRemover, restTime );
             }
          }
       }
@@ -224,12 +238,28 @@ public void setRecordCounterCell ( String text ) {
  * 
  *  @param activity program activity constant (ACTIVE or PASSIVE)   
  * */
-public void setActivity ( int activity ) {
+public synchronized void setActivity ( int activity ) {
 //   Log.log( 10, "(StatusBar.setActivity) set ACTIVITY with " + activity ); 
    if (activityDisplayed != activity) {
 	   startOperation(OperationType.activity, new Integer(activity));
 	   activityDisplayed = activity;
    }
+}
+
+/** Sets the background color of the Activity cell, optionally for a duration
+ * time given.
+ * 
+ * @param color {@code Color} or null for default
+ * @param duration int time in milliseconds, -1 for unlimited
+ */
+public void setActivityCellColor (Color color, int duration) {
+	if (color == null && defaultBgdColor != null) {
+		color = defaultBgdColor;
+	} 
+	
+	ActiveCellOrder order = new ActiveCellOrder(duration, color);
+	startOperation(OperationType.activeCell, order);
+	
 }
 
 @Override
@@ -242,28 +272,51 @@ public Font getFont () {
    return textField == null ? super.getFont() : textField.getFont();
 }
 
+public static Timer getTimer () {
+	if (timer == null) {
+		timer = new Timer();
+	}
+	return timer;
+}
+
 /** Starts a display operation executed on the EDT asynchronously. 
  * 
  * @param operation <code>OperationType</code>
- * @param param Object operation parameter suited for the given type
+ * @param param Object operation parameter suited for the given type;
+ *        if null the operation performs a clearing or its target
  */
-protected void startOperation ( OperationType operation, Object param ) {
+protected synchronized void startOperation ( OperationType operation, Object param ) {
    // order handling for operation type 'message' 
    if (operation == OperationType.message) {
       // cancel an already scheduled REMOVER task
-      if ( statusTextRemover != null )
+      if ( statusTextRemover != null ) {
          statusTextRemover.cancel();
+      }
 
-      // set new values for members 'currentOrder' and 'statusTextRemover'
-      currentOrder = (MessageOrder)param;
-      if (currentOrder != null) {
+      // set new values for members 'currentMsgOrder' and 'statusTextRemover'
+      currentMsgOrder = (MessageOrder)param;
+      if (currentMsgOrder != null) {
          // get display duration from order and limit to maximum time
-         currentOrder.duration = Math.min(currentOrder.getDuration(), maxTextDisplayTime);
+         currentMsgOrder.duration = Math.min(currentMsgOrder.getDuration(), maxTextDisplayTime);
 
          // create new REMOVER task, scheduled according to this message order
-         statusTextRemover = new RemoverTask();
-         Global.getTimer().schedule( statusTextRemover, currentOrder.duration );
+         statusTextRemover = new RemoverTask(0);
+         getTimer().schedule( statusTextRemover, currentMsgOrder.duration );
       }
+   }
+   
+   if (operation == OperationType.activeCell) {
+      // cancel an already scheduled REMOVER task
+      if ( activeCellRemover != null ) {
+    	  activeCellRemover.cancel();
+      }
+
+      ActiveCellOrder cellOrder = (ActiveCellOrder) param;
+	  if (cellOrder != null && cellOrder.duration > -1) {
+         // create new REMOVER task, scheduled according to this message order
+         activeCellRemover = new RemoverTask(1);
+         getTimer().schedule( activeCellRemover, cellOrder.duration );
+	  }
    }
    
    GUIService.executeOnEDT( new SwingOperation(operation, param) );
@@ -279,6 +332,9 @@ public synchronized void clearMessage () {
 public void shutdown () {
    if (statusTextRemover != null) {
       statusTextRemover.cancel();
+   }
+   if (activeCellRemover != null) {
+	  activeCellRemover.cancel();
    }
 }
 
@@ -338,7 +394,7 @@ public int getMinTextDisplayTime () {
  * @return boolean true == message showing
  */
 public boolean isMessageShowing () {
-   return currentOrder != null;
+   return currentMsgOrder != null;
 }
 
 /** Sets the minimum time in milliseconds for a single message to show in
@@ -405,8 +461,19 @@ private class MessageOrder {
    }
    
    @Override
-public String toString () {
+   public String toString () {
       return text;
+   }
+}
+
+private class ActiveCellOrder {
+   int duration;
+   Color color;
+
+   ActiveCellOrder (int duration, Color color) {
+	   Objects.requireNonNull(color);
+	   this.duration = duration;
+	   this.color = color;
    }
 }
 
@@ -446,10 +513,10 @@ private class SwingOperation implements Runnable {
 //            Log.log( 10, "(StatusBar.SwingOperation.run) COUNTER with ".concat( 
 //                  par == null ? "null" : par.toString() ));
             if ( par == null ) {
-               reccountLabel.setVisible( false );
+               counterLabel.setVisible( false );
             } else {
-               reccountLabel.setText( par.toString() );
-               reccountLabel.setVisible( true );
+               counterLabel.setText( par.toString() );
+               counterLabel.setVisible( true );
             }
             break;
             
@@ -464,16 +531,26 @@ private class SwingOperation implements Runnable {
             if ( par != null ) {
                Font font = (Font)par;
 //               Log.log( 10, "(StatusBar.SwingOperation.run) FONT with ".concat( font.getName() ));
-               if ( font != null & reccountLabel != null ) {
+               if ( font != null & counterLabel != null ) {
                   font = font.deriveFont( Font.PLAIN );
-                  reccountLabel.setFont( font );
+                  counterLabel.setFont( font );
                   formatLabel.setFont( font );
                   textField.setFont( font );
                }
                StatusBar.super.setFont( font );
             }
             break;
-         }
+            
+		case activeCell:
+			Color color = getBackground();
+			if (par != null) {
+				color = ((ActiveCellOrder)par).color;
+			}
+			activeLabel.setBackground(color);
+//			Log.log(10, "(StatusBar) -- setting ACTIVE-CELL color = " + color.getRGB());
+			break;
+			
+        }
       } catch ( Exception e ) { 
     	  e.printStackTrace(); 
       }
@@ -509,9 +586,30 @@ private class SwingOperation implements Runnable {
  * next available message in the message queue to display.
  */
 private class RemoverTask extends TimerTask {
-   
+   private int target; 
+
+   /** Creates a new remover task with target argument.
+    * 
+    * @param target int 0 = message field. 1 = activity-cell field
+    */
+   RemoverTask (int target) {
+	   this.target = target;
+   }
+	
    @Override
-public void run () {
+   public void run () {
+	   switch (target) {
+	   case 0:	clearMessage(); break;
+	   case 1:	clearActiveCell(); break;	
+	   }
+   }
+   
+   private void clearActiveCell() {
+       // .. start a clear operation for the active-cell field
+       startOperation( OperationType.activeCell, null );
+   }
+   
+   private void clearMessage () {
       // look into msg queue and activate next message for display
       MessageOrder order = msgQueue.poll();
       if (order != null) {
@@ -533,5 +631,6 @@ public void run () {
       }
    }
 }
+
 
 }

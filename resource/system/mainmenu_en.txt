@@ -4,14 +4,12 @@
 File
 	New	file.new	icon	ctrl N	true	#228B22
 	Open	file.open	asyn,icon	ctrl O	true	#228B22
-	Close	file.close	asyn	ctrl C	true	#228B22
-	Close All	file.close.all		alt C	true	#228B22
-	Delete	file.delete	icon	ctrl D	true	#228B22
+	Close	file.close	asyn	ctrl Q	true	#228B22
+	Close All	file.close.all		alt Q	true	#228B22
+	Delete	file.delete	icon		true	#228B22
 	---
 	Recent Files 	file.open.recent	menu,asyn,icon	F
 	Last Session	file.open.session		alt O 	true	
-#	Open URL	file.open.url	asyn		true
-#	Old Versions >	file.old.versions
 	---
 	Save	file.save	asyn,icon	ctrl S	true	#FF8C00
 	Save All	file.save.all		alt S	true	#FF8C00
@@ -24,14 +22,15 @@ Edit	menu.edit	menu
 	Preferences	admin.edit.preferences			true
 
 Actions
-	Search	action.search	icon	ctrl F
+	Search	action.search	icon	ctrl F	true
 	Internet-Search	action.search.web	icon	ctrl G	true
-	Translate	action.translate.web	icon	ctrl T	true
+	Translate	action.translate.web	icon	ctrl B	true
 	---
-	Print	action.print		ctrl P	true
+	Duplicate	action.duplicate			true
 	Sort	action.sort
-#	Fester Zeilenumbruch	action.linewrap.hard
-#	Dokumentenart ändern	action.document.type
+	Print	action.print		ctrl K	true
+#	Hard Linewrap	action.linewrap.hard
+#	Document Type	action.document.type
 	
 View
 	Toolbars
@@ -50,7 +49,6 @@ View
 		
 Manage
 	Encryption	admin.file.encryption	icon		false
-#	Data Security	admin.file.backup	icon		true
 	File History	admin.file.restore	menu		true
 #	---
 #	Import
@@ -67,8 +65,9 @@ Manage
 	Preferences	admin.edit.preferences		ctrl R	
 	
 Help
-	System Information	help.info.system			true
+	System Information	help.info.system		ctrl I	true
 	User Manual	help.user.manual			true
+#	TEST Function 1	debug.test.fct1			true
 	---
 	Ragna Scribe	help.about			true	#FF
 	

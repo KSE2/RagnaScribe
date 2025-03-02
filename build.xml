@@ -21,22 +21,23 @@
    	<property name="pagosoft" value="${extlib}/PgsLookAndFeel.jar"/>
    	<property name="keystore" value="${extlib}/kseKeystore"/>
    	<property name="activation" value="${extlib}/javax.activation.jar"/>
-   	<property name="util-cls-f1" value="${extlib}/kse-util-cla1-0-9-1.jar"/>
-   	<property name="util-cls-f2" value="${extlib}/kse-util-cla2-0-9-1.jar"/>
+   	<property name="util-cls-f1" value="${extlib}/kse-util-cla1-0-12-0.jar"/>
+   	<property name="util-cls-f2" value="${extlib}/kse-util-cla2-0-12-0.jar"/>
    	<property name="util-cls" value="${basedir}/../UtilClasses/classes"/>
    	<property name="moelnir" value="${extlib}/moelnir-kse-1-1-0.jar"/>
    	<property name="fafnir" value="${extlib}/fafnir-kse-1-1-0.jar"/>
-   	<property name="file-hashler" value="${extlib}/fhl-0-2-2-U.jar"/>
+   	<property name="file-hashler" value="${extlib}/fhl-lib-1-0-0.jar"/>
+   	<property name="pwslib" value="${extlib}/pws-engine-kse-2-10-1.jar"/>
 
 <!--   TEXT AND LISTS                                                 -->
 
 	<property name="p-name" value="Ragna" />
-	<property name="p-ver" value="1-0-0" />
+	<property name="p-ver" value="1-2-1" />
 	<property name="a-name" value="ragna" />
 	<property name="a-base-package" value="org.ragna" />
 	<property name="a-base-package-fs" value="org/ragna" />
-	<property name="year" value="2023" />
-	<property name="release date" value="04 Aug. 2023" />
+	<property name="year" value="2024" />
+	<property name="release date" value="05 May 2024" />
    <property name="docfileset" value="License.txt Readme.txt Changelog.txt" />
    <property name="rootfileset" value="build.xml MANIFEST.MF" />
    <property name="externclasspath" value="${junit};${activation};${util-cls};${file-hashler}" />
@@ -91,6 +92,7 @@
    <fileset dir="${util-cls}" excludes="**/Test*"/>
    <zipfileset src="${activation}"/>
    <zipfileset src="${file-hashler}" excludes="**/Test*"/>
+   <zipfileset src="${pwslib}"/>
 <!--   <zipfileset src="${moelnir}" excludes="**/Test*"/>-->
 <!--   <zipfileset src="${kunststoff}"/> 
    <zipfileset src="${jgoodies}"/>
@@ -124,6 +126,7 @@
     <zipfileset file="${activation}" prefix="${p-name}/lib"/>
     <zipfileset file="${util-cls-f1}" prefix="${p-name}/lib"/>
     <zipfileset file="${util-cls-f2}" prefix="${p-name}/lib"/>
+    <zipfileset file="${pwslib}" prefix="${p-name}/lib"/>
     <zipfileset file="${file-hashler}" prefix="${p-name}/lib"/>
 <!--
     <zipfileset file="${kunststoff}" prefix="jpws/lib"/>

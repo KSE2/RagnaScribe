@@ -197,24 +197,22 @@ public class ButtonBarDialog extends JDialog implements ChildWindowKeeper {
     * @return <b>true</b> if the dialog name is reserved, <b>false</b> otherwise
     * @since 0-5-0
     */
-   public static boolean isDialogActive ( String name )
-   {
+   public static boolean isDialogActive ( String name ) {
       return activeDialogs.contains( name );
    }
    
    @Override
    public synchronized void addChildWindow ( Window win ) {
       if ( win != null ) {
-         synchronized (childWindows) {
-            // late instantiation of child window array list 
-            if ( childWindows == null ) {
-               childWindows  = new ArraySet<Window>();
-            }
-            
-            if ( childWindows.add( win ) ) {
-               Log.log( 7, "(ButtonBarDialog.addChildWindow) adding child window : " + win.getName() );
-            }
-         }
+          // late instantiation of child window array list 
+          if ( childWindows == null ) {
+             childWindows  = new ArraySet<Window>();
+          }
+          synchronized (childWindows) {
+             if ( childWindows.add( win ) ) {
+                Log.log( 7, "(ButtonBarDialog.addChildWindow) adding child window : " + win.getName() );
+             }
+          }
       }
    }
    

@@ -53,9 +53,9 @@ import org.ragna.core.PrintParameters.ArticlePrintModus;
 import org.ragna.core.PrintParameters.PrintScope;
 import org.ragna.front.util.ButtonBarDialog;
 import org.ragna.front.util.DefaultButtonBarListener;
-import org.ragna.front.util.FontChooser;
 import org.ragna.util.PersistentOptions;
 
+import kse.utilclass.gui.FontChooser;
 import kse.utilclass.gui.VerticalFlowLayout;
 
 

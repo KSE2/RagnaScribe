@@ -103,9 +103,39 @@ public class TreepadReader implements DocumentReader {
        this.autoDetectHtmlArticles = autoDetectHtmlArticles;
     }
 
+    /** Attempts to identify the stored UUID value in the given Treepad document.
+     * Returns null if no such information is found.  Does not close the
+     * input stream.
+     * <p>This method does not take the effort of analysing the complete 
+     * document and should be preferred if only its UUID is searched.
+     *   
+     * @param input InputStream Treepad document data stream
+     * @return UUID or null
+     * @throws IOException 
+     */
+    public static UUID readUUID (InputStream input) throws IOException {
+        LineNumberReader reader = new LineNumberReader(new InputStreamReader(input, "ASCII"));
+    	
+        // check first line for TREEPAD file format
+        String line = reader.readLine();
+        if ( line == null || line.toLowerCase().indexOf("treepad version 2.7") == -1 ) {
+           throw new UnknownFileFormatException("not a Treepad 2.7 file!");
+        }
+
+        // read an optional UUID value
+        UUID uuid = null;
+        int index = line.toLowerCase().indexOf("uuid="); 
+        if (index > -1) {
+           String ustr = line.substring(index+5, index+37);
+           uuid = new UUID(ustr);
+        }
+
+        return uuid;
+    }
+    
     @Override
     /** Reads a pad-document from the input stream which is formatted as
-     * a TREEPAD 2.7 document file.
+     * a TREEPAD 2.7 document file. Does not close the input stream.
      * 
      * @param in InputStream
      * @return <code>PadDocument</code>
@@ -227,7 +257,7 @@ public class TreepadReader implements DocumentReader {
             article.setTitle(titleLine);
             Log.debug(10, "(TreepadReader) creating ARTICLE parent=" + 
                   parent + ", child=" + isChild + ", title=" + article + ", delta=" + depthMarkerDelta);
-            article.getPropertySerial();
+//            article.getPropertySerial();
             
             // update PARENT reference
             if (depthMarkerDelta == 1) {

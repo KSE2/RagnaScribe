@@ -130,7 +130,7 @@ public class DisplayManager {
    /** Viewable objects of interest which can be addressed by a focus change. */
    public enum FocusableView { Order, Article }
    
-   SetStack<DocumentDisplay> displayList = new SetStack<DocumentDisplay>();
+   SetStack<DocumentDisplay> displayList = new SetStack<>();
 
    private JMenuBar              mainMenuBar;
    private JPanel                primaryDisplayPanel;
@@ -294,7 +294,7 @@ public class DisplayManager {
 	} catch (InvocationTargetException | InterruptedException e) {
 		e.printStackTrace();
 	}
-   }
+  }
    
    /** Collects preferences for the given document from the current display.
     * This updates the preferences in the document.
@@ -485,6 +485,16 @@ public class DisplayManager {
       return currentDisplay == null ? null : currentDisplay.getSelectedDisplay();
    }
 
+   /** Sets the currently selected document display.
+    * 
+    * @param display {@code DocumentDisplay}, may be null
+    */
+   public void setSelectedDisplay (DocumentDisplay display) {
+	   if (display != null & currentDisplay != null) {
+		   currentDisplay.setSelectedDisplay(display);
+	   }
+   }
+   
    /** Returns the article editor of the currently selected document or
     * null if nothing is selected.
     * 
@@ -506,6 +516,19 @@ public class DisplayManager {
       return document;
    }
 
+   /** Returns an array with all pad-documents currently open in the display.
+    * 
+    * @return {@code PadDocument[]}
+    */
+   public PadDocument[] getOpenDocuments () {
+	   PadDocument[] arr = new PadDocument[displayList.size()];
+	   int i = 0;
+	   for (DocumentDisplay display : displayList) {
+		   arr[i++] = display.getDocument();
+	   }
+	   return arr;
+   }
+   
    /** Returns the currently selected document order-view in the GUI or null 
     * if no document is available. (The order-view manages the set of articles
     * in the document GUI.)
@@ -518,6 +541,21 @@ public class DisplayManager {
       return view;
    }
 
+   /** Returns the {@code DocumentDisplay} associated with the given document
+    * or null if no display is associated.
+    *  
+    * @param document {@code PadDocument}
+    * @return {@code DocumentDisplay}
+    */
+   public DocumentDisplay getDisplay (PadDocument document) {
+	   for (DocumentDisplay display : displayList) {
+		   if (document.equals(display.getDocument())) {
+			   return display;
+		   }
+	   }
+	   return null;
+   }
+   
    public void refreshCommandDisplay () {
       MenuHandler.get().refreshAll();
    }
@@ -557,17 +595,22 @@ public class DisplayManager {
 
    // ------------------ INNER CLASSES  --------------------------
    
-   /** Interface defines a set of commands that can be given to an order-
-    * view of articles. Furthermore, the view's property 'SELECTED ARTICLE'
-    * can be handled. The view issues property changes to registered classes.
-    * These properties are: a) "selectionChanged" (value: PadArticle) reports 
-    * the currently selected element, b) "documentChanged" (value: PadDocument)
-    * indicates that a different document has been set up, c) "structureChanged"
-    * indicates that the list of elements has been modified (additions, 
-    * subtractions, movements). 
-    * <p>A DocumentOrderView class can by itself issue commands to other system
-    * managers, e.g. like the DocumentRegistry, which is not a matter of this
-    * interface.
+   /** DocumentOrderView is an abstraction for a display based, user interactive
+    * tool which expresses and modifies the set of articles within a 
+    * {@code PadDocument} and includes a navigable  order applied over its 
+    * elements.
+    * <p>This interface defines a set of commands to programmatically interact 
+    * with the view. The pad-document can be set-up and changed, redefining the content
+    * of the display; furthermore, the view's property 'SELECTED ARTICLE'
+    * can be handled. 
+    * <p>This view issues property change events to registered listeners. 
+    * The following properties are reported: 
+    * <p><table width=600>
+    * <tr><th align=left>KEY</th><th align=left>VALUE OLD</th><th align=left>VALUE NEW</th><th align=left>EVENT</th></tr>
+    * <tr><td>selectionChanged</td><td>{@code PadArticle}</td><td>{@code PadArticle}</td><td>element selection change</td></tr>
+    * <tr><td>documentChanged</td><td>{@code PadDocument}</td><td>{@code PadDocument}</td><td>document setup</td></tr>
+    * <tr><td>structureChanged</td><td>{@code PadArticle} subtracted</td><td>{@code PadArticle} added</td><td>additions, subtractions, movements</td></tr>
+    * </table>
     */
    public interface DocumentOrderView extends MenuActivist {
       
@@ -577,11 +620,18 @@ public class DisplayManager {
        */
       JComponent getView();
       
-      void firePropertyChange(String propertyName, Object oldValue, Object newValue);
-
-      /** The binding document of this view.
+      /** Fires a property change event for the listeners to this view.
+       * No controls are performed on the property name or the values.
        * 
-       * @return {@code PadDocument}
+       * @param propertyName String 
+       * @param oldValue Object
+       * @param newValue Object
+       */
+      void firePropertyChange (String propertyName, Object oldValue, Object newValue);
+
+      /** The bound document of this view or null if no document is set up.
+       * 
+       * @return {@code PadDocument} or null
        */
       PadDocument getPadDocument();
 
@@ -600,86 +650,90 @@ public class DisplayManager {
       
 //      void removeElement(PadArticle element);
 
-      /** Sets the pad-document whose articles are expressed by this view.
+      /** Sets the {@code PadDocument} for the content of this view.
+       * If this view already contains a document, it is replaced and returned,
+       * otherwise null is returned. The argument may be null in which case
+       * the display results to be empty. Does nothing if the argument is 
+       * identical to the installed document.
        * 
        * @param document {@code PadDocument}, may be null for no document
+       * @return {@code PadDocument} or null
        */
-      public void setPadDocument (PadDocument document);
+      public PadDocument setPadDocument (PadDocument document);
       
       /** Moves the currently selected element one place upwards in the order.
-       * Does nothing if no element is selected.
+       * The movement can be limited to preservation of the membership of the
+       * element in its parent group. Does nothing if no element is selected.
        * 
        * @return boolean true = success, false = no change
        */
       boolean moveUp();
 
       /** Moves the currently selected element one place downwards in the order.
-       * Does nothing if no element is selected.
+       * The movement can be limited to preservation of the membership of the
+       * element in its parent group. Does nothing if no element is selected.
        * 
        * @return boolean true = success, false = no change
        */
       boolean moveDown();
 
       /** Changes the order level of the currently selected element one unit 
-       * lower (which means one place deeper in the graph). This works only
-       * for orders which support this kind of movement, e.g. in graphs.
+       * lower if possible (which means one place deeper in the graph). This 
+       * works only for orders which support this kind of movement.
+       * Does nothing if no element is selected.
        * 
-       * <p>Does nothing if no element is selected.
-       * 
-       * @return boolean true = success, false = no change
+       * @return boolean true = moved, false = no change
        */
       boolean indent();
       
       /** Changes the order level of the currently selected element one unit 
-       * higher (which means one place shallower in the graph). This works only
-       * for orders which support this kind of movement, e.g. in graphs.
+       * higher if possible (which means one place shallower in the graph). 
+       * This works only for orders which support this kind of movement.
+       * Does nothing if no element is selected.
        * 
-       * <p>Does nothing if no element is selected.
-       * 
-       * @return boolean true = success, false = no change
+       * @return boolean true = moved, false = no change
        */
       boolean outdent();
 
+      // TODO
       PadArticle createChild (PadArticle art); 
       
+      // TODO
       PadArticle createSibling (PadArticle art);
       
-      /** Returns the currently selected element or null
-       * if nothing is selected.
+      /** Returns the currently selected element article or null if nothing 
+       * is selected. (The article shall be derived from a display component
+       * which associates articles to display elements.) 
        * 
-       * @return PadArticle selected article
+       * @return {@code PadArticle} or null
        */
-      PadArticle getSelectedElement();
+      PadArticle getSelectedElement ();
       
-      /** Returns the first element in this order view or null
-       * if the view is empty.
+      /** Returns the first element article in this order view or null if the 
+       * view is empty.
        * 
-       * @return UUID first element or null
+       * @return {@code PadArticle} or null
        */
-      PadArticle getFirstElement();
+      PadArticle getFirstElement ();
       
-      /** Sets the current element selection in the order view. Selection in 
-       * the view is always single-bound.
+      /** Sets the current element selection in this view. Selection in 
+       * the view is always single-selection.
        * 
-       * @param uuid UUID element to select or null for de-selection
+       * @param article {@code PadArticle} article to select or null to 
+       *                de-select
+       * @return boolean true = selection changed, false = selection unchanged
        */
-      void setSelectedElement(PadArticle article);
+      boolean setSelectedElement (PadArticle article);
       
 //      /** Removes all elements from this order view. This does not remove
 //       * the elements from their database but is a pure display action!
 //       */
 //      void clear();
       
-      /** Returns the number of elements in this order view. */
+      /** Returns the number of elements in this order view. 
+       */
       int size ();
 
-//      /** Populates this order view with the set of pad-articles respecting
-//       * the implicit order defined on them via their 'parent' property.
-//       * 
-//       * @param iterator Iterator of PadArticle
-//       */
-//      void populateArticle (Iterator<PadArticle> iterator);
-      
       /** Requests the GUI focus to this order view.
        */
       void requestFocus();
@@ -698,12 +752,31 @@ public class DisplayManager {
        */
       MouseListener getMouseListener ();
 
-      public void addPropertyChangeListener(PropertyChangeListener listener);
-      public void removePropertyChangeListener(PropertyChangeListener listener);
+      /** Adds a property change listener for this view. (See class description).
+       * 
+       * @param listener {@code PropertyChangeListener}, may be null
+       */
+      public void addPropertyChangeListener (PropertyChangeListener listener);
+      
+      /** Removes a property change listener from this view.
+       * 
+       * @param listener {@code PropertyChangeListener}, may be null
+       */
+      public void removePropertyChangeListener (PropertyChangeListener listener);
 
-//	 void setReadOnly (boolean setting);
-	 
-	 boolean isReadOnly ();
+      /** Whether the contained document is set to read-only. Returns false if
+       * not document is assigned.
+       * 
+       * @return boolean
+       */
+	  boolean isReadOnly ();
+	  
+	  /** This view is empty if not document is set up or if the document
+	   * contains no articles.
+	   * 
+	   * @return boolean
+	   */
+	  boolean isEmpty ();
    }
    
    private interface DocumentDisplayField {
@@ -826,8 +899,7 @@ public class DisplayManager {
       @Override
       public synchronized void removeDisplay (int index) {
          if ( index > -1 & index < tabs.getTabCount() ) {
-            DocumentDisplay display = 
-                          (DocumentDisplay)tabs.getComponentAt(index);
+            DocumentDisplay display = (DocumentDisplay)tabs.getComponentAt(index);
             display.finishEdit();
             tabs.removeTabAt(index);
             Log.log(8, "(MultiDocumentDisplay.removeDisplay) DISPLAY removed: " 
@@ -869,8 +941,7 @@ public class DisplayManager {
                   // react to change of display selection (multi-display)
                   if ( display != lastSelectedDisplay ) {
                      display.restoreFocus();
-                     Global.getDocumentRegistry().setSelectedDocument(
-                           display.getDocument().getUUID());
+                     Global.getDocumentRegistry().setSelectedDocument(display.getDocument().getUUID());
    
                      String title = display.getDocument().getTitle();
                      Log.debug(10, "(DisplayChangeListener) new display selection, index " 
@@ -1134,13 +1205,22 @@ public class DisplayManager {
 
          } else if ( key == "documentAdded" ) {
             PadDocument document = (PadDocument)evt.getNewValue();
-            addDocumentDisplay(document);
-            Global.getDocumentRegistry().setSelectedDocument(document.getUUID());
+            if (!isDocumentShowing(document)) {
+            	addDocumentDisplay(document);
+            	Global.getDocumentRegistry().setSelectedDocument(document.getUUID());
+            }
             
          } else if ( key == "documentRemoved" ) {
             PadDocument document = (PadDocument)evt.getNewValue();
             removeDocumentDisplay(document);
          
+         } else if ( key == "documentReplaced" ) {
+             PadDocument newDoc = (PadDocument)evt.getNewValue();
+             DocumentDisplay display = getDisplay(newDoc);
+             if (display != null) {
+            	 display.setDocument(newDoc);
+             }
+          
          } else if ( key == "documentSelected" ) {
             PadDocument document = (PadDocument)evt.getNewValue();
             if (document != null) {
@@ -1158,96 +1238,7 @@ public class DisplayManager {
       }
    }
    
-   private class DocumentListener implements PropertyChangeListener {
-      DocumentDisplay display;
-      
-      DocumentListener (DocumentDisplay display) {
-         if (display == null)
-            throw new NullPointerException("display is null");
-         
-         this.display = display;
-      }
-      
-      @Override
-      public void propertyChange (PropertyChangeEvent evt) {
-         
-         DocumentOrderView orderView = display.getOrderView();
-         ArticleEditor editor = display.getArticleEditor();
-         PadDocument document = (PadDocument)evt.getSource();
-         String key = evt.getPropertyName();
-
-//         if ( key == "defaultDocumentDisplayModus" ) {
-//            String value = (String)evt.getNewValue();
-//            defaultDisplayModus = DisplayModus.fromString(value);
-//
-//         } else if ( key == "documentAdded" ) {
-//            PadDocument document = (PadDocument)evt.getNewValue();
-//            addDocumentDisplay(document, true);
-//            
-//         } else if ( key == "documentRemoved" ) {
-//            PadDocument document = (PadDocument)evt.getNewValue();
-//            removeDocumentDisplay(document);
-//         }
-
-//         Log.log(6, "(DisplayManager.DocumentListener) received PROPERTY CHANGE: "
-//               .concat(key));
-         
-         // TODO react to selection change
-         
-         if ( key == "titleChanged" ) {
-            updateDocumentDisplay(document);
-            
-         } else if ( key == "documentModified" ) {
-            updateDocumentDisplay(document);
-            
-         } else if ( key == "articleTitleChanged" ) {
-//            updateDocumentDisplay(document);
-
-         } else if ( key == "articleAdded" ) {
-            PadArticle article = (PadArticle)evt.getNewValue();
-//            orderView.addElement(article);
-            orderView.setSelectedElement(article);
-
-         } else if ( key == "articleRemoved" ) {
-//            PadArticle article = (PadArticle)evt.getNewValue();
-//            orderView.removeElement(article);
-            orderView.setSelectedElement(null);
-
-         } else if ( key == "readOnlyChanged" ) {
-        	 boolean setting = (Boolean) evt.getNewValue();
-        	 editor.setReadOnly(setting);
-//        	 orderView.setReadOnly(setting);
-
-        	 // set background and foreground color of the text component
-             PadArticle article = display.getSelectedArticle();
-             Color bgdCol = setting ? READONLY_EDITOR_COLOR :
-        	     (article != null && article.getBackgroundColor() != null) ?
-                 article.getBackgroundColor() : display.defaultBackgroundColor;
-             display.getEditorView().setBackground(bgdCol);
-             Color fgrCol = setting ? READONLY_TEXT_COLOR :
-        	     (article != null && article.getForegroundColor() != null) ?
-                 article.getForegroundColor() : display.defaultForegroundColor;
-             display.getEditorView().setForeground(fgrCol);
-
-        	 // set the background color of the order-view
-             bgdCol = setting ? READONLY_ORDERVIEW_COLOR : ORDER_VIEW_COLOR;
-             display.treePanel.setBackground(bgdCol);
-         }
-      }
-   }
-//   private class DisplayFocusListener implements FocusListener {
-//
-//      @Override
-//      public void focusGained (FocusEvent e) {
-//         
-//      }
-//
-//      @Override
-//      public void focusLost (FocusEvent e) {
-//         
-//      }
-//      
-//   }
+   
    
    // -------------------------------------------------------------------
       
@@ -1333,6 +1324,7 @@ public class DisplayManager {
                @Override
                public void propertyChange (PropertyChangeEvent evt) {
                   if (evt.getSource() != getOrderView()) return;
+                  
                   if (evt.getPropertyName() == "selectionChanged") {
                      // TODO article end-edit
                      captureEditorProperties();
@@ -1349,13 +1341,14 @@ public class DisplayManager {
                      }
 
                   } else if (evt.getPropertyName() == "documentChanged") {
+                	  // TODO ?
                   }
               }
                
             };
             
-            getOrderView().addFocusListener(fListener);
-            getOrderView().addPropertyChangeListener(pListener);
+            orderView.addFocusListener(fListener);
+            orderView.addPropertyChangeListener(pListener);
             getEditorView().addFocusListener(fListener);
             
             splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, true);
@@ -1689,7 +1682,7 @@ public class DisplayManager {
                // finish article editor values
                if (currentArticle != null) {
                   captureEditorProperties();
-                  document.setSelectedArticle(currentArticle);
+//                  document.setSelectedArticle(currentArticle);
                }
                
                // store preferences
@@ -1728,22 +1721,26 @@ public class DisplayManager {
          
          /** Sets the active content for this document display.
           * If a document is currently held by this display, its edition is
-          * finished and it is removed. <code>Null</code> can be used to 
-          * remove a current document from display.
+          * finished and it is removed. <code>null</code> can be used to 
+          * remove the current document from display.
           * 
           * @param doc <code>PadDocument</code>, may be null
           */
          public void setDocument (final PadDocument doc) {
-            if (Util.equal(doc, document)) return;
+        	 if (doc == document) return;
+        	 Log.log(5, "(DocumentDisplay.setDocument) setting display to " + doc);
 
             // finish a previous document edition
             finishEdit();
-            
+            if (document != null) {
+            	document.removePropertyChangeListener(docListener);
+            }
             
             if (doc == null) {
-               document.removePropertyChangeListener(docListener);
                document = null;
                removeAll();
+               setupEditor(null);
+               setupOrderView(null);
                
             } else {
                // take over parameter values from the document
@@ -1772,7 +1769,8 @@ public class DisplayManager {
                setupOrderView(selectedArticle);
                
                // finally hook into document events
-               doc.addPropertyChangeListener(docListener);
+               document.addPropertyChangeListener(docListener);
+               updateDocumentDisplay(document);
             }
          }
    
@@ -1783,8 +1781,11 @@ public class DisplayManager {
           *                to be shown
           */
          private void setupEditor (PadArticle article) {
+        	if (article != null && (article.getDocument() == null || article.getDocument() != document))
+        		throw new IllegalArgumentException("unrelated article in " + document);
+        	
+        	// set current article setting and exchange document listener
             JTextComponent editor = getEditorView();
-            editor.setEditable(!document.isReadOnly());
             if (currentArticle != null) {
             	editor.removePropertyChangeListener(currentArticle.getEditorListener());
             }
@@ -1792,11 +1793,10 @@ public class DisplayManager {
             if (article != null) {
             	editor.addPropertyChangeListener(article.getEditorListener());
             }
-            Log.debug(6, "(DocumentDisplay.setupEditor) setting up EDITOR with ARTICLE "
-                  + article);
-            
+            Log.debug(6, "(DocumentDisplay.setupEditor) setting up EDITOR with ARTICLE " + article);
+
             if (article == null) {
-               // set default appearance values
+               // set default appearance values (for "no article")
                editor.setBackground(EMPTY_EDITOR_COLOR);
                editor.setFont(defaultTextFont);
                editor.setEnabled(false);
@@ -1805,7 +1805,13 @@ public class DisplayManager {
                editor.select(0, 0);
 
             } else {
-               // set appearance
+                // conditional settings
+                editor.setEditable(!document.isReadOnly());
+                if (editor instanceof JTextArea) {
+             	   ((JTextArea)editor).setLineWrap(article.getLineWrap());
+                }
+
+               // set appearance for "article present"
                Color color = !editor.isEditable() ? READONLY_EDITOR_COLOR :
             	     article.getBackgroundColor() != null ?
                      article.getBackgroundColor() : defaultBackgroundColor;
@@ -1819,11 +1825,6 @@ public class DisplayManager {
                editor.setFont(font);
                editor.setEnabled(true);
                
-               // conditional settings
-               if (editor instanceof JTextArea) {
-            	   ((JTextArea)editor).setLineWrap(article.getLineWrap());
-               }
-               
                // give text to the editor
                Document editorDocument = article.getEditorDocument();
                articlePanel.editor.setDocument(editorDocument);
@@ -1833,28 +1834,38 @@ public class DisplayManager {
             }
          }
          
+         /** Sets the current text selection in the editor component without
+          * directly modifying corresponding article values.
+          * 
+          * @param sel Dimension (width=start, height=end)
+          */
+         public void setEditorTextSelection (Dimension sel) {
+             JTextComponent editor = getEditorView();
+             editor.select(sel.width, sel.height);
+         }
+         
          private void setupOrderView (PadArticle selectedArticle) {
         	 orderView.setPadDocument(document);
         	 
             // set visibility and content of document MARKER panel
-            long backupTime = document.getBackupTime();
+            long backupTime = document == null ? 0 : document.getBackupTime();
             if (backupTime > 0) {
           	   treePanel.markerLabel.setText("BACKUP of " + Util.localeTimeString(backupTime));
             }
       	    treePanel.markerPanel.setVisible(backupTime > 0);
 
             // select article, choose first article if parameter is null
-            if (selectedArticle == null & orderView.size() > 0) {
+            if (selectedArticle == null & !orderView.isEmpty()) {
                selectedArticle = orderView.getFirstElement();
             }
             orderView.setSelectedElement(selectedArticle);
             
        	 	// set the background color of the order-view
-            Color bgdCol = document.isReadOnly() ? READONLY_ORDERVIEW_COLOR : ORDER_VIEW_COLOR;
+            Color bgdCol = document != null && document.isReadOnly() ? READONLY_ORDERVIEW_COLOR : ORDER_VIEW_COLOR;
             treePanel.setBackground(bgdCol);
             
             // set font if defined in document
-            Font font = document.getOrderviewFont();
+            Font font = document == null ? null : document.getOrderviewFont();
             if (font != null) {
             	orderView.getView().setFont(font);
             }
@@ -2023,34 +2034,33 @@ public class DisplayManager {
 
          private abstract class AbstractOrderView implements DocumentOrderView {
              protected PadDocument bindingDoc;
-             protected SelectionListener selectionListener = new SelectionListener();
+             protected SelectionListener componentSelectionListener = new SelectionListener();
              protected PropertyChangeSupport support = new PropertyChangeSupport(this);
+		     protected PadArticle lastSelected;
              
-             private PropertyChangeListener changeListener = new PropertyChangeListener() {
+             /** A listener to {@code PadDocument} objects' "selectionChanged" 
+              * property change.
+              */
+             private PropertyChangeListener docChangeListener = new PropertyChangeListener() {
 				@Override
 				public void propertyChange (PropertyChangeEvent evt) {
-					setSelectedElement((PadArticle) evt.getNewValue());
+					PadArticle article = (PadArticle) evt.getNewValue();
+					PadArticle oldArticle =  (PadArticle) evt.getOldValue();
+					setSelectedElement(article);
+		            firePropertyChange("selectionChanged", oldArticle, article);
 				}
 			 };
 			 
-//			 private boolean readOnly;
-             
 			 @Override
 			 public void addFocusListener (FocusListener flistener) {
 			    getView().addFocusListener(flistener);
 			 }
 
 			 @Override
-			 public void addPropertyChangeListener (
-			     PropertyChangeListener listener) {
+			 public void addPropertyChangeListener (PropertyChangeListener listener) {
 			     support.addPropertyChangeListener(listener);
 			 }
 
-//			 @Override
-//			 public void setReadOnly (boolean setting) {
-//				readOnly = setting;
-//			 }
-			
 			 @Override
 			 public boolean isReadOnly () {
 				 return bindingDoc == null ? false : bindingDoc.isReadOnly();
@@ -2058,7 +2068,7 @@ public class DisplayManager {
 			 
 			@Override
 			public PadArticle getFirstElement () {
-			   return size() == 0 ? null : bindingDoc.getArticle(0);
+			   return isEmpty() ? null : bindingDoc.getArticle(0);
 			}
 
 			@Override
@@ -2261,10 +2271,14 @@ public class DisplayManager {
 			   getView().requestFocusInWindow();
 			}
 
+			@Override
+			public boolean isEmpty() {
+				return bindingDoc == null || bindingDoc.getArticleCount() == 0;
+			}
 
 			@Override
 			public int size () {
-			   return bindingDoc.getArticleCount();
+			   return bindingDoc == null ? 0 : bindingDoc.getArticleCount();
 			}
         	 
             public void setSelectedIndex (int index) {
@@ -2276,6 +2290,11 @@ public class DisplayManager {
             	}
             }
         	 
+            /** Returns the index value of the currently selected element
+             * in this view or -1 if nothing is selected.
+             *  
+             * @return int element index or -1
+             */
             public int getSelectedIndex () {
             	PadArticle sel = getSelectedElement();
             	int index = bindingDoc.indexOf(sel);
@@ -2286,24 +2305,34 @@ public class DisplayManager {
             public PadDocument getPadDocument () {return bindingDoc;}
             
 			@Override
-			public void setPadDocument (PadDocument document) {
-				if (document == bindingDoc) return;
+			public PadDocument setPadDocument (PadDocument document) {
+				if (document == bindingDoc) return null;
+				PadDocument oldDoc = bindingDoc;
 				
+				// remove document listener from existing (bound) document
 				if (bindingDoc != null) {
-					bindingDoc.removePropertyChangeListener(changeListener);
+					bindingDoc.removePropertyChangeListener("selectionChanged", docChangeListener);
+//					getView().setVisible(false);
 				}
+
+				// set new value for bound document
+				// if we have a document, add our document listener
 				if (document == null) {
-					getView().setVisible(false);
 					bindingDoc = null;
 				} else {
 					bindingDoc = document;
-					bindingDoc.addPropertyChangeListener("selectionChanged", changeListener);
-					getView().setVisible(true);
+					bindingDoc.addPropertyChangeListener("selectionChanged", docChangeListener);
 				}
+            	
+//            	getView().setVisible(true);
+                support.firePropertyChange("documentChanged", oldDoc, document);
+				return oldDoc;
 			}
 			
 			@Override
 			public void firePropertyChange (String propertyName, Object oldValue, Object newValue) {
+				Log.log(8, "(AbstractOrderView.firePropertyChange) Property Change = " + propertyName 
+						+ ", V1=" + oldValue + ", V2=" + newValue);
 				support.firePropertyChange(propertyName, oldValue, newValue);
 			}
 
@@ -2312,11 +2341,11 @@ public class DisplayManager {
 				JMenu menu = new JMenu();
 				JMenuItem item;
 				UndoManager undoManager = bindingDoc.getUndoManager();
+				ActionHandler ah = ActionHandler.get();
+				Action action;
 
 				if (bindingDoc.isReadOnly()) {
 					// case read-only state
-					ActionHandler ah = ActionHandler.get();
-					Action action;
 					try {
 						action = ah.getAction(ActionHandler.ActionNames.ORDER_EDIT_COPY);
 						menu.add(new PopupAction(action));
@@ -2355,6 +2384,13 @@ public class DisplayManager {
 						menu.insertSeparator(4 + offset);
 						menu.insertSeparator(7 + offset);
 						menu.insertSeparator(12 + offset);
+						
+						// add DUPLICATE ARTICLE command
+						try {
+							action = ah.getAction(ActionHandler.ActionNames.ORDER_CREATE_DUPL);
+							menu.insert(new PopupAction(action), 7 + offset);
+						} catch (UnknownActionException e) {
+						}
 					}
 				}
 				return menu;
@@ -2400,12 +2436,10 @@ public class DisplayManager {
 			}
 
 			/** This row selection listener (for jList or JTree) fetches the 
-			  * document's article corresponding to the selected row, marks it
-			  * as SELECTED and issues an event "selectionChanged" in the current 
-			  * order-view's property change support. 
+			  * document's article assigned to the selected row, marks it
+			  * as SELECTED and causes the document to assume the new selection. 
 			  */
 			 private class SelectionListener implements ListSelectionListener, TreeSelectionListener {
-			     private PadArticle lastSelected;
 			     
 				@Override
 				public void valueChanged (TreeSelectionEvent e) {
@@ -2420,24 +2454,27 @@ public class DisplayManager {
 				}
 				 
 				private void selectionChanged () {
-					DocumentOrderView orderView = getOrderView();
-			        PadArticle selArticle = orderView.getSelectedElement();
+			        PadArticle selArticle = getSelectedElement();
 			        
 			        if (Util.notEqual(selArticle, lastSelected)) {
-			           Log.log(8, "(AbstractOrderView) firing property change: SELECTION CHANGED: " +
+			           Log.log(8, "(AbstractOrderView) component event: SELECTION CHANGED: " +
 			              lastSelected + " --> " +  selArticle );
-			           orderView.firePropertyChange("selectionChanged", lastSelected, selArticle);
-			           lastSelected = selArticle;
 			           
-//			           // TEST function: display depth and index of selected article
-//			           if (selArticle != null && isSelectedDisplay()) {
-//			              int index = orderView.getPadDocument().indexOf(selArticle);
-//			              String text = "index=" + index + 
-//			                    "  depth=" + selArticle.getOrderDepth() +
-//			                    "  parent=" + selArticle.getParent();
-//			              Global.getStatusBar().clearMessage();
-//			              Global.getStatusBar().putMessage(text, 3000, UnixColor.Indigo);
-//			           }
+			           lastSelected = selArticle;
+			           PadDocument document = getPadDocument();
+			           if (document != null) {
+			        	   document.setSelectedArticle(lastSelected);
+			           
+//				           // TEST function: display depth and index of selected article
+//				           if (selArticle != null && isSelectedDisplay()) {
+//				              int index = document.indexOf(selArticle);
+//				              String text = "index=" + index + 
+//				                    "  depth=" + selArticle.getOrderDepth() +
+//				                    "  parent=" + selArticle.getParent();
+//				              Global.getStatusBar().clearMessage();
+//				              Global.getStatusBar().putMessage(text, 4000, UnixColor.Indigo);
+//				           }
+			           }
 			        }
 				}
 			 }
@@ -2458,7 +2495,8 @@ public class DisplayManager {
             	 jTree.setBackground(UnixColor.Chartreuse);
             	 jTree.setEditable(true);
             	 jTree.getSelectionModel().setSelectionMode(TreeSelectionModel.SINGLE_TREE_SELECTION);;
-            	 jTree.getSelectionModel().addTreeSelectionListener(selectionListener);
+            	 jTree.getSelectionModel().addTreeSelectionListener(componentSelectionListener);
+            	 model = jTree.getModel();
 
                  jTree.setCellRenderer(new DefaultTreeCellRenderer() {
                      // this cell renderer ensures that no empty string is
@@ -2531,7 +2569,7 @@ public class DisplayManager {
             		}
             		
             		private void maybeShowPopup(MouseEvent e) {
-            			Log.log(8, "(JTreeOrderView.mouseListener) popup check");
+//            			Log.log(8, "(JTreeOrderView.mouseListener) popup check");
             		    if (e.isPopupTrigger()) {
             		       JPopupMenu pm = getPopupMenu();
             		       if (pm != null) {
@@ -2557,9 +2595,7 @@ public class DisplayManager {
              }  // init
              
 			@Override
-			public JComponent getView() {
-				return jTree;
-			}
+			public JComponent getView() {return jTree;}
 
 			@Override
 			public PadArticle getSelectedElement() {
@@ -2568,33 +2604,59 @@ public class DisplayManager {
 			}
 
 			@Override
-			public void setSelectedElement (PadArticle article) {
-				TreePath path = article == null ? null : article.getTreePath();
-				jTree.setSelectionPath(path);
-				jTree.scrollPathToVisible(path);
+			public boolean setSelectedElement (PadArticle article) {
+		        if (Util.notEqual(article, lastSelected)) {
+			        Log.log(8, "(JTreeOrderView.setSelectedElement) setting TREE PATH article selection: " + article );
+//			        lastSelected = article;
+
+			        if (article == null) {
+			        	jTree.clearSelection();
+			        } else {
+			           
+			        	TreePath path = article.getTreePath();
+						TreePath selPath = jTree.getSelectionPath();
+						if (Util.notEqual(path, selPath)) {
+							jTree.setSelectionPath(path); 
+							jTree.scrollPathToVisible(path);
+						}
+			        }
+			        return true;
+		        }
+		        return false;
 			}
              
             @Override
-            public void setPadDocument (PadDocument document) {
-            	if (document == bindingDoc) return;
+            public PadDocument setPadDocument (PadDocument document) {
+            	if (document == bindingDoc) return null;
+                Log.debug(6, "(JTreeOrderView.setPadDocument) setting up document with " + document);
             	PadDocument oldDoc = bindingDoc;
             	super.setPadDocument(document);
             	
+            	// create the model for JTree
             	if (document == null) {
             		model = null;
+            		jTree.setModel(null);
             	} else {
             		// setting data model from new document
             		model = document.getTreeModel();
                	 	model.addTreeModelListener(new ModelListener());
             		jTree.setModel(model);
+            		jTree.revalidate();
+            		jTree.repaint();
 
-            		// retrieving tree expansion info from document and restoring state of jTree
+            		// reading tree expansion info from document and restoring state of jTree
             		String hstr = document.getOptions().getOption("tree-expansion-info");
             		byte[] info = Util.hexToBytes(hstr);
            		 	setTreeExpansionFromInfo(info);
+
+           		 	// setting document's selected article
+            		PadArticle selected = document.getSelectedArticle();
+            		if (selected != null) {
+            			setSelectedElement(selected);
+            		}
             	}
             	
-                support.firePropertyChange("documentChanged", oldDoc, document);
+                return oldDoc;
             }
 
             public byte[] getTreeExpansionInfo () {
@@ -2618,7 +2680,7 @@ public class DisplayManager {
 
 				@Override
 				public void treeNodesInserted (TreeModelEvent e) {
-					firePropertyChange("structureChanged", null, null);
+					firePropertyChange("structureChanged", null, null);	// TODO values for events
 				}
 
 				@Override
@@ -2631,13 +2693,77 @@ public class DisplayManager {
 					firePropertyChange("structureChanged", null, null);
 				}
 			}
-
-//			@Override
-//			public void setReadOnly(boolean setting) {
-//				// TODO Auto-generated method stub
-//				
-//			}
          } // JTreeOrderView
+
+		private class DocumentListener implements PropertyChangeListener {
+		      DocumentDisplay display;
+		      
+		      DocumentListener (DocumentDisplay display) {
+		         if (display == null)
+		            throw new NullPointerException("display is null");
+		         
+		         this.display = display;
+		      }
+		      
+		      @Override
+		      public void propertyChange (PropertyChangeEvent evt) {
+		         
+		         DocumentOrderView orderView = display.getOrderView();
+		         ArticleEditor editor = display.getArticleEditor();
+		         PadDocument document = (PadDocument)evt.getSource();
+		         String key = evt.getPropertyName();
+		
+		//         if ( key == "defaultDocumentDisplayModus" ) {
+		//            String value = (String)evt.getNewValue();
+		//            defaultDisplayModus = DisplayModus.fromString(value);
+		//
+		
+		//         Log.log(6, "(DisplayManager.DocumentListener) received PROPERTY CHANGE: "
+		//               .concat(key));
+		         
+		         // TODO react to selection change
+		         
+		         if ( key == "titleChanged" ) {
+		            updateDocumentDisplay(document);
+		            
+		         } else if ( key == "documentModified" ) {
+		            updateDocumentDisplay(document);
+		            
+//		         } else if ( key == "articleTitleChanged" ) {
+		//            updateDocumentDisplay(document);
+		
+		         } else if ( key == "articleAdded" ) {
+		            PadArticle article = (PadArticle)evt.getNewValue();
+		//            orderView.addElement(article);
+		            orderView.setSelectedElement(article);
+		
+		         } else if ( key == "articleRemoved" ) {
+		//            PadArticle article = (PadArticle)evt.getNewValue();
+		//            orderView.removeElement(article);
+		            orderView.setSelectedElement(null);
+		
+		         } else if ( key == "readOnlyChanged" ) {
+		        	 boolean setting = (Boolean) evt.getNewValue();
+		        	 editor.setReadOnly(setting);
+		//        	 orderView.setReadOnly(setting);
+		
+		        	 // set background and foreground color of the text component
+		             PadArticle article = display.getSelectedArticle();
+		             Color bgdCol = setting ? READONLY_EDITOR_COLOR :
+		        	     (article != null && article.getBackgroundColor() != null) ?
+		                 article.getBackgroundColor() : display.defaultBackgroundColor;
+		             display.getEditorView().setBackground(bgdCol);
+		             Color fgrCol = setting ? READONLY_TEXT_COLOR :
+		        	     (article != null && article.getForegroundColor() != null) ?
+		                 article.getForegroundColor() : display.defaultForegroundColor;
+		             display.getEditorView().setForeground(fgrCol);
+		
+		        	 // set the background color of the order-view
+		             bgdCol = setting ? READONLY_ORDERVIEW_COLOR : ORDER_VIEW_COLOR;
+		             display.treePanel.setBackground(bgdCol);
+		         }
+		      }
+		   }
          
 //         private class ListOrderView extends AbstractOrderView {
 //            private JList<PadArticle> jList;
@@ -2660,7 +2786,7 @@ public class DisplayManager {
 //               jList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 //
 //               // add a listener to the list's row selection events
-//               jList.getSelectionModel().addListSelectionListener(selectionListener);
+//               jList.getSelectionModel().addListSelectionListener(componentSelectionListener);
 //               
 //               // customise cell rendering
 //               jList.setCellRenderer(new DefaultListCellRenderer() {

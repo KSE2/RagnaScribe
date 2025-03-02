@@ -58,7 +58,7 @@ public abstract class ActionManager {
    public static final long MAX_WORKER_OPERATION_TIME = 180000;
    private static final int THREAD_QUEUE_CAPACITY = 50;
    private static final int THREAD_WATCH_PERIOD = 10000;
-   private static final boolean USE_WATCH_DOG = true;
+   private static final boolean USE_WATCH_DOG = false;
 
    // *** MEMBER VARIABLES  ***
    

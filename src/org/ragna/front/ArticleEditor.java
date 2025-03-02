@@ -147,6 +147,15 @@ public interface ArticleEditor extends MenuActivist {
     void setForeground (Color color);
     
     Font getFont ();
+
+
+    /** Sets the current text selection in this editor. The values are 
+     * corrected to suit the document length.
+     * 
+     * @param start int
+     * @param end int
+     */
+	void setTextSelection (int start, int end);
     
     
 }

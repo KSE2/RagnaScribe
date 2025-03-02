@@ -38,7 +38,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.prefs.BackingStoreException;
@@ -53,6 +52,7 @@ import javax.swing.undo.UndoManager;
 
 import org.ragna.front.DisplayManager;
 import org.ragna.front.DisplayManager.DisplayModus;
+import org.ragna.front.DisplayManager.DocumentDisplay;
 import org.ragna.io.IO_Manager;
 import org.ragna.io.IO_Manager.SystemFileType;
 import org.ragna.util.OptionBag;
@@ -72,27 +72,29 @@ import kse.utilclass.sets.ArraySet;
  * 
  * <p>The document issues property change events via a 
  * {@code PropertyChangeListener}. Available properties are:
- * <br>documentModified		- (old, new modified)
+ * <br>documentModified		- (old, new Boolean, modified)
  * <br>uuidChanged			- (old, new UUID)
- * <br>articleAdded			- (null, added article)
- * <br>articleRemoved		- (null, removed article)
- * <br>articleModified		- (null, article)
- * <br>articleTitleChanged	- (null, article)
- * <br>articleUuidChanged	- (old UUID, article)
+ * <br>encodingChanged		- (old, new String, charset name)
+ * <br>encryptionChanged	- (old, new byte[], passphrase)
+ * <br>articleAdded			- (null, PadArticle, added)
+ * <br>articleRemoved		- (null, PadArticle, removed)
+ * <br>articleModified		- (null, PadArticle)
+ * <br>articleTitleChanged	- (null, PadArticle)
+ * <br>articleUuidChanged	- (old UUID, PadArticle)
  * <br>selectionChanged		- (old, new PadArticle)
  * <br>typeChanged			- (old, new DocumentType)
  * <br>displayModusChanged	- (old, new DisplayModus)
- * <br>layoutChanged		- (null, (font, backgroundColor, dividerPosition))
- * <br>titleChanged			- (null, null)readOnlyChanged
- * <br>readOnlyChanged		- (old, new readOnly)
+ * <br>layoutChanged		- (null, null) font, backgroundColor, dividerPosition
+ * <br>titleChanged			- (old, new String) 
+ * <br>readOnlyChanged		- (old, new Boolean, readOnly)
  */
 public class DefaultPadDocument implements PadDocument, Cloneable {
    private static Preferences documentPrefs = Preferences.userRoot().node( "/ragnasc/document/prop" );
    private static int counter;
    static { cleanJavaPreferences(); }
 
-   private Map<UUID, PadArticle> articleMap = new HashMap<UUID, PadArticle>();
-   private List<PadArticle> articleList = new ArrayList<PadArticle>();
+   private HashMap<UUID, PadArticle> articleMap = new HashMap<UUID, PadArticle>();
+   private ArrayList<PadArticle> articleList = new ArrayList<PadArticle>();
    private PropertyChangeSupport support = new PropertyChangeSupport(this);
    private DocumentListModel listModel = new DocumentListModel();
    private DocumentTreeModel treeModel = new DocumentTreeModel();
@@ -165,11 +167,12 @@ public class DefaultPadDocument implements PadDocument, Cloneable {
     */
    public static OptionBag getDocumentOptionsFromPath (String filepath) throws IOException {
 	   Objects.requireNonNull(filepath);
-       String hstr = documentPrefs.get(filepath, null);
-       if (hstr != null) {
+	   String key = Util.tailStr(filepath, Preferences.MAX_KEY_LENGTH);
+       String uuidText = documentPrefs.get(key, null);
+       if (uuidText != null) {
     	   try {
     		   Log.debug(5, "(DefaultPadDocument.getDocumentOptionsFromPath) get preferences for " + filepath);
-    		   return getDocumentOptionsFromID(new UUID(hstr));
+    		   return getDocumentOptionsFromID(new UUID(uuidText));
     	   } catch (NumberFormatException e) {
     	   }
        } 
@@ -198,9 +201,9 @@ public class DefaultPadDocument implements PadDocument, Cloneable {
 		try {
 			for (String key : documentPrefs.keys().clone()) {
 				if ((key.endsWith(".tmp") || key.endsWith(".tmp.fhl")) && !new File(key).exists()) {
-					String hs = documentPrefs.get(key, null);
-					if (hs != null) {
-						documentPrefs.remove(hs);
+					String uuid = documentPrefs.get(key, null);
+					if (uuid != null) {
+						documentPrefs.remove(uuid);
 					}
 					documentPrefs.remove(key);
 					Global.getRecentFilesStack().remove(key);
@@ -233,11 +236,12 @@ public class DefaultPadDocument implements PadDocument, Cloneable {
    }
    
    @Override
-   public void savePreferences () {
+   public void savePreferences (boolean unconditional) {
 	   // compile article preferences
+	   compileDocumentProperties();
 	   compileArticleProperties();
 
-	   if (options.isModified()) {
+	   if (unconditional || options.isModified()) {
 		   String content = options.toString();
 
 		   // primary storage under UUID
@@ -247,13 +251,14 @@ public class DefaultPadDocument implements PadDocument, Cloneable {
 		   // secondary storage under filepath (if available)
 		   String path = getExternalPath();
 		   if (path != null) {
-			   documentPrefs.put(path, key);
+			   String key2 = Util.tailStr(path, Preferences.MAX_KEY_LENGTH);
+			   documentPrefs.put(key2, key);
 		   }
 		   
 		   options.resetModified();
-		   Log.debug(4, "-- document preferences assigned for " + path);
-		   Log.debug(4, "-- document preferences written (" + getShortTitle() + "): " + key);
-		   Log.debug(5, "(DefaultPadDocument.savePreferences) value preferences : \n" + content);
+		   Log.debug(4, "(DefaultPadDocument.savePreferences) document filepath = " + path);
+		   Log.debug(4, "(DefaultPadDocument.savePreferences) prefs written for " + this);
+		   Log.debug(5, "(DefaultPadDocument.savePreferences) preferences : \n" + content);
 	   }
    }
    
@@ -266,7 +271,8 @@ public class DefaultPadDocument implements PadDocument, Cloneable {
 	   // secondary storage under filepath (if available)
 	   String path = getExternalPath();
 	   if (path != null) {
-		   documentPrefs.remove(path);
+		   String key2 = Util.tailStr(path, Preferences.MAX_KEY_LENGTH);
+		   documentPrefs.remove(key2);
 	   }
    }
    
@@ -291,10 +297,17 @@ public class DefaultPadDocument implements PadDocument, Cloneable {
 		   String artSerial = a.getPropertySerial();
 		   String hs2 = artID + " = " + artSerial;
 		   storeList.add(hs2);
-		   Log.debug(10, "(DefaultPadDocument.compileArticleProperties) article properties entry = " + hs2);
+//		   Log.debug(10, "(DefaultPadDocument.compileArticleProperties) article properties entry = " + hs2);
 	   }
 	   
 	   options.setStringList("ARTOPT", storeList);
+   }
+   
+   private void compileDocumentProperties () {
+	   DocumentDisplay display = DisplayManager.get().getDisplay(this);
+	   if (display != null) {
+		   display.finishEdit();
+	   }
    }
    
    @Override
@@ -320,9 +333,15 @@ public class DefaultPadDocument implements PadDocument, Cloneable {
    @Override
    public void setUUID (UUID uuid) {
    	  Objects.requireNonNull(uuid);
-   	  UUID old = this.uuid;
-   	  this.uuid = uuid;
-   	  firePropertyChange("uuidChanged", old, uuid);
+   	  if (!this.uuid.equals(uuid)) {
+	   	  removePreferences();
+	   	  UUID old = this.uuid;
+	   	  this.uuid = uuid;
+	   	  savePreferences(true);
+	   	  
+	   	  firePropertyChange("uuidChanged", old, uuid);
+	      setModified();
+   	  }
    }
 
    @Override
@@ -432,11 +451,11 @@ public class DefaultPadDocument implements PadDocument, Cloneable {
    }
 
    public synchronized boolean contains (UUID uuid) {
-	   return uuid == null ? false : articleMap.containsKey(uuid);
+	   return uuid != null && articleMap.containsKey(uuid);
    }
    
    public synchronized boolean contains (PadArticle article) {
-	   return contains(article.getUUID());
+	   return article != null && contains(article.getUUID());
    }
    
    @Override
@@ -465,12 +484,16 @@ public class DefaultPadDocument implements PadDocument, Cloneable {
 //
    @Override
    public PadArticle getSelectedArticle () {
-	   // if undefined, try to retrieve UUID from options and define thereof
+	   // if undefined, try to retrieve index from options and define thereof
 	   if (selectedArticle == null) {
-		   String hs = options.getOption("selected-article");
-		   if (!hs.isEmpty()) {
-			   UUID id = new UUID(hs);
-			   selectedArticle = getArticle(id);
+//		   String hs = options.getOption("selected-article");
+		   int index = options.getIntOption("selected-article");
+		   if (index > -1) {
+//			   UUID id = new UUID(hs);
+			   try {
+				   selectedArticle = getArticle(index);
+			   } catch (IndexOutOfBoundsException e) {
+			   }
 		   }
 	   }
        return selectedArticle;
@@ -478,15 +501,27 @@ public class DefaultPadDocument implements PadDocument, Cloneable {
 
    @Override
    public synchronized void setSelectedArticle (PadArticle article) {
-       if (article != null && !contains(article) ||
-          Util.equal(article, selectedArticle) ) return;
-       
+       if (Util.equal(article, selectedArticle) ) return;
+       if (article != null && article.getDocument() != this) { 
+    	  throw new IllegalArgumentException("unrelated article: " + article);
+       }
        PadArticle oldSelected = selectedArticle;
-       selectedArticle = article;
-
-       // store to document preferences
-       String value = article == null ? null : article.getUUID().toHexString();
-  	   options.setOption("selected-article", value);
+       
+	   if (article == null) {
+		   selectedArticle = null;
+	       Log.log(8, "(DefaultPadDocument.setSelectedArticle) clearing selection = ");
+	       
+	   } else {
+	       if (!contains(article)) return;
+	       selectedArticle = article;
+	       Log.log(8, "(DefaultPadDocument.setSelectedArticle) selected article = " + article);
+	   }
+  	   
+       // store selection value to document preferences
+//         String value = article == null ? null : article.getUUID().toHexString();
+//  	   options.setOption("selected-article", value);
+       int index = article == null ? -1 : indexOf(article);
+  	   options.setIntOption("selected-article", index);
   	   
        // issue property change event(s)
        support.firePropertyChange("selectionChanged", oldSelected, article);
@@ -509,14 +544,10 @@ public class DefaultPadDocument implements PadDocument, Cloneable {
          // set new root element
          PadArticle root = articleList.get(0);
          String title = root.getTitle();
-         String shortTitle = root.getShortTitle();
 
          // update document title / shortTitle from root
          if (!title.isEmpty()) {
             setTitle(title);
-         }
-         if (!shortTitle.isEmpty()) {
-            setShortTitle(shortTitle);
          }
       }
    }
@@ -526,6 +557,7 @@ public class DefaultPadDocument implements PadDocument, Cloneable {
 //   }
    
    private void firePropertyChange (String property, Object oldValue, Object newValue) {
+      Log.log(10, "(DefaultPadDocument) firing change event: " + property);
       support.firePropertyChange(property, oldValue, newValue);
    }
    
@@ -539,7 +571,7 @@ public class DefaultPadDocument implements PadDocument, Cloneable {
    
    @Override
    public int indexOf (UUID articleUuid) {
-	   return indexOf(getArticle(uuid));
+	   return indexOf(getArticle(articleUuid));
    }
 
    @Override
@@ -671,7 +703,7 @@ public class DefaultPadDocument implements PadDocument, Cloneable {
     */
    @Override
    public PadArticle[] getChildrenOf (int index) {
-	   if (index < 0 | index > articleMap.size()-1)
+	   if (index < 0 | index > articleList.size()-1)
 		   throw new IndexOutOfBoundsException("index = " + index);
 	   
       // create the list of articles in sequence of articleList
@@ -901,6 +933,21 @@ public class DefaultPadDocument implements PadDocument, Cloneable {
    }
    
    @Override
+   public int getNextSiblingIndex (int index) {
+      if (index < 0 | index >= articleList.size())
+          throw new IndexOutOfBoundsException("undefined article index: " + index);
+      int depth = getArticle(index).getOrderDepth(); 
+      int max = getArticleCount();
+      for (int i = index+1; i < max; i++) {
+    	  int depthArt = getArticle(i).getOrderDepth();
+    	  if (depthArt <= depth) {
+    		  return i;
+    	  }
+      }
+      return max;
+   }
+   
+   @Override
    public synchronized void insertArticleAt (PadArticle parent, int index, PadArticle[] arr) {
 	  if (index > 0) 
 		  Objects.requireNonNull(parent, "parent is null");
@@ -909,9 +956,13 @@ public class DefaultPadDocument implements PadDocument, Cloneable {
          throw new IndexOutOfBoundsException("undefined article index: " + index);
       if (index == 0 && !isEmpty())
          throw new IllegalArgumentException("illegal attempt to replace the root node");
-      int pi = indexOf(parent);
-      if (parent != null && (pi == -1 || pi >= index))
-          throw new IllegalArgumentException("parent not contained or misplaced, index = " + pi);
+      if (parent != null) {
+    	  int pi = indexOf(parent);
+    	  if (pi == -1)
+    		  throw new IllegalArgumentException("parent not contained");
+       	  if (pi >= index)
+    		  throw new IllegalArgumentException("parent position is misplaced, parent-index = " + pi);
+      }
 
       if (arr.length > 0) {
          // verify argument article array
@@ -952,7 +1003,9 @@ public class DefaultPadDocument implements PadDocument, Cloneable {
          article.setDefaultFont(parent.getDefaultFont());
          article.setBackgroundColor(parent.getBackgroundColor());
          article.setForegroundColor(parent.getForegroundColor());
-         article.setLineWrap(parent.getLineWrap());
+         if (!article.getLineWrap()) {
+        	 article.setLineWrap(parent.getLineWrap());
+         }
          
       } else {
           article.setDefaultFont(getDefaultTextFont());
@@ -1076,18 +1129,21 @@ public class DefaultPadDocument implements PadDocument, Cloneable {
       String oldTitle = this.title;
       if (Util.notEqual(title, oldTitle)) {
          this.title = title == null ? "" : title;
-         if (shortTitle == null) {
-            setShortTitle(title);
-         }
+         setShortTitle(title);
          
          // issue property change event(s)
-         support.firePropertyChange("titleChanged", null, null);
+         support.firePropertyChange("titleChanged", oldTitle, this.title);
          setModified();
+         
+         // set root article name if exists
+         if (!isEmpty()) {
+        	 getArticle(0).setTitle(title);
+         }
       }
    }
 
    @Override
-   public void setShortTitle (String title) {
+   public boolean setShortTitle (String title) {
       String target = null;
       if (title != null) {
          int maxLength = Global.getOptions().getIntOption("maxShortTitleLength");
@@ -1097,11 +1153,14 @@ public class DefaultPadDocument implements PadDocument, Cloneable {
          }
       }
 
-      if (Util.notEqual(target, shortTitle)) {
+      String oldTitle = shortTitle;
+      if (Util.notEqual(target, oldTitle)) {
          shortTitle = target;
-         support.firePropertyChange("titleChanged", null, null);
+         support.firePropertyChange("titleChanged", oldTitle, shortTitle);
          setModified();
+         return true;
       }
+      return false;
    }
 
    @Override
@@ -1189,7 +1248,7 @@ public class DefaultPadDocument implements PadDocument, Cloneable {
 		   Log.debug(5, "(DefaultPadDocument.setEncoding) setting encoding = ".concat(charset));
 
 		   // issue property change event(s)
-	       support.firePropertyChange("encodingChanged", null, null);
+	       support.firePropertyChange("encodingChanged", oldSet, charset);
 	   }
    }
    
@@ -1199,16 +1258,55 @@ public class DefaultPadDocument implements PadDocument, Cloneable {
    }
 
    @Override
-   public PadDocument getShallowCopy () {
+   public DefaultPadDocument getShallowCopy () {
       try {
          DefaultPadDocument copy = (DefaultPadDocument)clone();
          copy.uuid = new UUID();
          copy.modified = true;
+         copy.options.setModified();
          return copy;
       } catch (CloneNotSupportedException e) {
          e.printStackTrace();
          return null;
       }
+   }
+
+   @Override
+   public DefaultPadDocument getFullCopy () {
+	   DefaultPadDocument copy = getShallowCopy();
+	   if (copy != null) {
+		   int selected = getSelectedIndex();
+		   copy.support = new PropertyChangeSupport(copy);
+		   copy.articleListener = copy.new ArticleListener();
+		   copy.undoManager = new UndoManager();
+		   copy.options = options.copy(); 
+		   copy.articleList = new ArrayList<PadArticle>();
+		   copy.articleMap = new HashMap<UUID, PadArticle>();
+		   copy.treeModel = copy.new DocumentTreeModel();
+		   copy.listModel = copy.new DocumentListModel();
+
+		   // reconstruct articles in identical order
+		   PadArticle parent = null;
+		   for (PadArticle a : articleList) {
+			   PadArticle ac = a.copy();
+			   ac.setDocument(copy);
+		       ac.addPropertyChangeListener(copy.articleListener);
+			   copy.articleList.add(ac);
+			   copy.articleMap.put(ac.getUUID(), ac);
+
+			   // set the copy article's parent in analogy of original structure
+			   parent = a.getParent();
+			   if (parent == null) {
+				   ac.setParent(null);
+			   } else {
+				   int index = articleList.indexOf(parent);
+				   ac.setParent(copy.articleList.get(index));
+			   }
+		   }
+		   
+		   copy.setSelectedIndex(selected);
+	   }
+   	   return copy;
    }
 
 // ------------ inner classes ----------------
@@ -1460,7 +1558,7 @@ public class DefaultPadDocument implements PadDocument, Cloneable {
    }
 
 @Override
-public void setBackupFile(long time) {
+public void setBackupFile (long time) {
 	backupModifyTime = time;
 }
 
@@ -1510,17 +1608,16 @@ public boolean isEncrypted () {return passwd != null;}
 @Override
 public void setEncrypted (byte[] passphrase) {
 	byte[] oldValue = passwd;
-	passwd = passphrase;
-	if ((passphrase != null && oldValue != null && !Util.equalArrays(oldValue, passphrase))
-		|| ((passphrase == null) != (oldValue == null))) {
-		
-		String path = IO_Manager.get().updateExternalFileReference(this);
+	if (Util.notEqual(passphrase, oldValue)) {
+		passwd = passphrase;
+		firePropertyChange("encryptionChanged", oldValue, passphrase);
 		setModified();
-		
-		// push this document's path in the recent-files-stack if it is showing in display
-		if (path != null && isShowing()) {
-			Global.getRecentFilesStack().push(path);
-		}
+
+			
+//			// push this document's path in the recent-files-stack if it is showing in display
+//			if (path != null && isShowing()) {
+//				Global.getRecentFilesStack().push(path);
+//			}
 	}
 }
 
@@ -1541,6 +1638,18 @@ public void setOrderviewFont (Font font) {
 @Override
 public SystemFileType getFileType() {
 	return isEncrypted() ? SystemFileType.TREEPAD_ENCRYPTED : SystemFileType.TREEPAD_DOCUMENT;
+}
+
+@Override
+public String toString() {
+	String hstr = getShortTitle();
+	return "PadDoc: " + uuid.toHexString().substring(0, 8) + " " + (hstr == null ? "" : hstr);
+}
+
+@Override
+public File getFile() {
+	String path = getExternalPath();
+	return path == null ? null : new File(path);
 }
 
 }

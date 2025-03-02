@@ -44,9 +44,10 @@ import java.util.Properties;
 
 import kse.utilclass.misc.Util;
 
-public class OptionBag implements PersistentOptions
-{
+public class OptionBag implements PersistentOptions {
+	
    private static final String LISTMARK = "LIST.";
+   
    private PropertiesUTF  properties = new PropertiesUTF();
    private Properties  defaults = new Properties();
    private PropertyChangeSupport support = new PropertyChangeSupport(this); 
@@ -72,6 +73,18 @@ public class OptionBag implements PersistentOptions
     */ 
    public OptionBag ( String options ) throws IOException {
       load( options );
+   }
+   
+   /** Returns a deep copy of this option-bag with a new (empty) listener base.
+    *  The "head" text is identical, the "modified" marker is set to false.
+    *  
+    *  @return {@code OptionBag}
+    */
+   public synchronized OptionBag copy () {
+	   OptionBag copy = new OptionBag(defaults);
+	   copy.properties = (PropertiesUTF) properties.clone();
+	   copy.head = head;
+	   return copy;
    }
    
    /** Replaces the content of this OptionBag with a Properties list
@@ -473,6 +486,11 @@ public class OptionBag implements PersistentOptions
    /** Resets the "modified" marker to <b>false</b>. */
    public void resetModified () {
       modified = false;
+   }
+   
+   /** Sets the "modified" marker to <b>true</b>. */
+   public void setModified () {
+	   modified = true;
    }
    
    /** Sets this option bag to the MODIFIED state (without 

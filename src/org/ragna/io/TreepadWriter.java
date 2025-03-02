@@ -29,9 +29,10 @@ import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.nio.charset.Charset;
 import java.nio.charset.IllegalCharsetNameException;
-import java.util.Iterator;
+import java.nio.charset.UnsupportedCharsetException;
 
 import org.ragna.core.AbstractPadArticle;
+import org.ragna.core.Global;
 import org.ragna.core.PadArticle;
 import org.ragna.core.PadDocument;
 
@@ -41,19 +42,20 @@ import org.ragna.core.PadDocument;
  */
 public class TreepadWriter implements DocumentWriter {
 	
-    private Charset encoding = Charset.defaultCharset();
+    private Charset encoding = Charset.forName(Global.getDefaultTreepadEncoding());
 
     /**
-     * Creates a new Treepad Writer with the VM default character encoding.
-     *  
+     * Creates a new <i>Treepad</i> Writer with the global default character 
+     * encoding for <i>Treepad</i> files.
      */
     public TreepadWriter () {
     }
 
     /**
-     * Creates a new Treepad Writer with an encoding charset.
+     * Creates a new Treepad Writer with the given encoding charset. If the
+     * charset is null, the global default for Treepad files is used.
      *  
-     * @param encoding String charset name or null for default
+     * @param encoding String charset name or null for global default
      * @throws IllegalCharsetNameException
      * @throws UnsupportedCharsetException
      */

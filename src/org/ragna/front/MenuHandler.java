@@ -95,7 +95,7 @@ public class MenuHandler {
     		 menuResource = "#system/mainmenu_en.txt";
     	 }
          InputStream input = Global.res.getResourceStream(menuResource);
-         JMenuBarReader reader = new OurMenuBarReader(input, null, false, false);
+         JMenuBarReader reader = new OurMenuBarReader(input, Charset.forName("UTF-8"), false, false);
          reader.setDefaultEnabled(false);
          SkilledJMenuBar bar = reader.readMenu();
          return bar;
@@ -129,26 +129,31 @@ public class MenuHandler {
 	   JMenu menu = new JMenu();
 	   PadDocument doc = DisplayManager.get().getSelectedDocument();
 	   if (doc != null) {
-		   File[] files = IO_Manager.get().getFileHistory(doc);
-		   if (files != null) {
-			   // add list of unique history files
-			   for (File f : files) {
-				   Action a = ActionHandler.get().getLoadDocumentAction(f, doc);
-				   JMenuItem item = new JMenuItem(a);
-				   menu.add(item);
-			   }
-			   
-			   // add "delete history" command
-			   if (files.length > 0) {
-				   try {
-					   Action a = ActionHandler.get().getAction(ActionHandler.ActionNames.MANAGE_DELETE_HISTORY);
+		   File[] files;
+		   try {
+			   files = IO_Manager.get().getFileHistory(doc);
+			   if (files != null) {
+				   // add list of unique history files
+				   for (File f : files) {
+					   Action a = ActionHandler.get().getLoadDocumentAction(f, doc);
 					   JMenuItem item = new JMenuItem(a);
-					   menu.addSeparator();
 					   menu.add(item);
-				   } catch (UnknownActionException e) {
-					   e.printStackTrace();
+				   }
+				   
+				   // add "delete history" command
+				   if (files.length > 0) {
+					   try {
+						   Action a = ActionHandler.get().getAction(ActionHandler.ActionNames.MANAGE_DELETE_HISTORY);
+						   JMenuItem item = new JMenuItem(a);
+						   menu.addSeparator();
+						   menu.add(item);
+					   } catch (UnknownActionException e) {
+						   e.printStackTrace();
+					   }
 				   }
 			   }
+		   } catch (IOException e1) {
+			   e1.printStackTrace();
 		   }
 	   }
 	   return menu;
@@ -201,8 +206,7 @@ public class MenuHandler {
    
    private class OurMenuBarReader extends JMenuBarReader {
 
-      public OurMenuBarReader(InputStream input, Charset cs, boolean icons,
-            boolean tooltips) {
+      public OurMenuBarReader(InputStream input, Charset cs, boolean icons, boolean tooltips) {
          super(input, cs, icons, tooltips);
       }
 
